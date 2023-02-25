@@ -20,11 +20,26 @@ pub enum CToken<'a> {
 
 // Entrypoint
 fn main() {
-    println!("{:?}", token_from_slice("   "));
+    let input = String::from("   123 23 4  3");
+    println!("{:?}", lex(&input));
 }
 
 // Main tokenizer
-fn token_from_slice(data: &str) -> Result<(CToken, usize)> {
+fn lex(data: &String) -> Result<Vec<CToken>> {
+    let mut tokens = Vec::<CToken>::new();
+    let mut data_slice = &data[0..];
+    let mut bytes_read = 0;
+
+    while data_slice.len() > 0 {
+        let (token, bytes) = next_token(data_slice)?;
+        tokens.push(token);
+        bytes_read += bytes;
+        data_slice = &data[bytes_read..]
+    }
+    Ok(tokens)
+}
+
+fn next_token(data: &str) -> Result<(CToken, usize)> {
     match data.chars().next() {
         None => bail!("Unexpected EOF"),
         Some(ch) => match ch {
