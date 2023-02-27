@@ -77,6 +77,8 @@ fn parse_statement<'a>(mut it: impl Iterator<Item = &'a CToken<'a>>) -> Result<S
         Some(CToken::Integer(val)) => val,
         _ => bail!("Expected integer return value, got {:?}", t),
     };
+    expect_consume_next_token(&mut it, CToken::SemiColon)?;
+    expect_consume_next_token(&mut it, CToken::CloseBrace)?;
     Ok(Statement::Return(*retval))
 }
 

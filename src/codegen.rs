@@ -23,7 +23,7 @@ fn codegen_function<'a>(name: &'a str, rtype: &ReturnType, s: &'a Statement) -> 
 
     match s {
         Statement::Return(retval) => {
-            code.push_str(&format!("    movl ${}, eax\n", retval));
+            code.push_str(&format!("    movl ${}, %eax\n", retval));
             code.push_str(&format!("    ret\n"));
         }
     }
