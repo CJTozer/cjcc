@@ -4,7 +4,7 @@ use anyhow::{bail, Result};
 use nom::character::complete::{alphanumeric0, digit1, multispace1};
 use std::cmp::min;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum CToken<'a> {
     // Keywords and identifiers
     Keyword(&'a str), // A keyword like 'int' or 'return'.  TODO these should be an enum of their own, not a string.
@@ -72,7 +72,7 @@ fn keyword_or_identifier_from_slice(s: &str) -> Result<(CToken, usize)> {
 
 fn keyword_from_slice(s: &str) -> Option<(CToken, usize)> {
     // TODO Grab the list of keywords from somewhere and iterate them neatly!
-    for kw in vec!["int", "main", "return"] {
+    for kw in vec!["int", "return"] {
         if s.starts_with(kw) {
             if let Some(c) = s.chars().nth(kw.len()) {
                 if !c.is_alphanumeric() {
