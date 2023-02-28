@@ -1,5 +1,6 @@
 // Following https://norasandler.com/2017/11/29/Write-a-Compiler.html
 // Tests are here: https://github.com/nlsandler/write_a_c_compiler
+// (run with `cargo run ../write_a_compiler/stage_1/valid/return_2.c)
 
 use anyhow::Result;
 use std::path::PathBuf;
@@ -20,14 +21,14 @@ fn main() -> Result<()> {
 
     // Generate tokens by lexing
     let tokens = lex::lex_to_tokens(&input)?;
-    // print!("\n** Tokens:\n");
-    // println!("{:?}", tokens);
+    print!("\n** Tokens:\n");
+    println!("{:?}", tokens);
 
     // Build the AST from the tokens iterator
     let it = tokens.iter();
     let ast = parse::parse_program(it)?;
-    // print!("\n** AST:\n");
-    // println!("{:?}", ast);
+    print!("\n** AST:\n");
+    println!("{:?}", ast);
 
     // Generate code from the AST
     let code = codegen::emit_code(&ast);
@@ -56,7 +57,7 @@ fn main() -> Result<()> {
             .arg(target)
             .output()?;
 
-        // print!("{:?}", gcc);
+        // print!("{:?}", _gcc);
     }
 
     Ok(())

@@ -15,6 +15,10 @@ pub enum CToken<'a> {
     OpenBrace,  // {
     CloseBrace, // }
     SemiColon,  // ;
+    // Unary Operators
+    Negation, // -
+    BitwiseComplement, // ~
+    LogicalNegation, // !
     // Constants
     Integer(i32), // A number
     // Operators
@@ -51,6 +55,9 @@ fn next_token(data: &str) -> Result<(CToken, usize)> {
             '(' => Ok((CToken::OpenParen, 1)),
             ')' => Ok((CToken::CloseParen, 1)),
             ';' => Ok((CToken::SemiColon, 1)),
+            '~' => Ok((CToken::BitwiseComplement, 1)),
+            '-' => Ok((CToken::Negation, 1)),
+            '!' => Ok((CToken::LogicalNegation, 1)),
             // Anything left (at this point, should be a keyword or identifier - we don't handle commas etc. yet)
             _ => keyword_or_identifier_from_slice(data),
         },

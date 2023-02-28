@@ -24,7 +24,8 @@ fn codegen_function<'a>(name: &'a str, _rtype: &ReturnType, s: &'a Statement) ->
         Statement::Return(Expression::ConstInt(retval)) => {
             code.push_str(&format!("    movl ${}, %eax\n", retval));
             code.push_str(&format!("    ret\n"));
-        }
+        },
+        _ => todo!(),
     }
 
     code

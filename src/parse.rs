@@ -24,21 +24,17 @@ pub enum Statement {
 
 #[derive(Debug)]
 pub enum Expression {
+    Negation(Box<Expression>),
+    BitwiseComplement(Box<Expression>),
+    LogicalNegation(Box<Expression>),
     ConstInt(i32),
-}
-
-// Test piece for recursive Enum
-pub enum StatementRec<'a> {
-    IfStatement(&'a StatementRec<'a>),
-    ElseStatement(&'a StatementRec<'a>),
-    Comparison(&'a StatementRec<'a>),
 }
 
 pub fn parse_program<'a>(mut it: impl Iterator<Item = &'a CToken<'a>>) -> Result<AST<'a>> {
     let tlc = if let Some(t) = it.next() {
         // First token must be Keyword("int")
         match t {
-            CToken::Keyword("int") => parse_function(ReturnType::Integer, &mut it)?,
+            CToken::Keyword("int") => parse_function(ReturnType::Integer, it)?,
             _ => bail!("Unexpected token {:?}", t),
         }
     } else {
@@ -69,7 +65,7 @@ fn parse_function<'a>(
     expect_consume_next_token(&mut it, CToken::OpenBrace)?;
 
     // Parse the function body - this will consume the '}'
-    let statement = parse_statement(&mut it)?;
+    let statement = parse_statement(it)?;
 
     Ok(TopLevelConstruct::Function(fn_name, rtype, statement))
 }
@@ -86,11 +82,23 @@ fn parse_statement<'a>(mut it: impl Iterator<Item = &'a CToken<'a>>) -> Result<S
 fn parse_expression<'a>(mut it: impl Iterator<Item = &'a CToken<'a>>) -> Result<Expression> {
     // Currently only expect an integer constant.
     let t = it.next();
-    let const_int = match t {
-        Some(CToken::Integer(val)) => val,
+    let exp = match t {
+        Some(CToken::Integer(val)) => Expression::ConstInt(*val),
+        Some(CToken::Negation) => {
+            let inner = parse_expression(it)?;
+            Expression::Negation(Box::new(inner))
+        },
+        Some(CToken::BitwiseComplement) => {
+            let inner = parse_expression(it)?;
+            Expression::BitwiseComplement(Box::new(inner))
+        },
+        Some(CToken::LogicalNegation) => {
+            let inner = parse_expression(it)?;
+            Expression::LogicalNegation(Box::new(inner))
+        },
         _ => bail!("Expected integer constant, got {:?}", t),
     };
-    Ok(Expression::ConstInt(*const_int))
+    Ok(exp)
 }
 
 fn expect_consume_next_token<'a>(
