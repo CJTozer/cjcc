@@ -49,7 +49,7 @@ fn main() -> Result<()> {
     // gcc -m32 assembly.s -o out
     if let Some(target) = path.to_str() {
         // println!("{}", target);
-        let gcc = Command::new("gcc")
+        let _gcc = Command::new("gcc")
             .arg("-m32")
             .arg(tmp_loc)
             .arg("-o")

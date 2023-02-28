@@ -19,7 +19,12 @@ pub enum ReturnType {
 
 #[derive(Debug)]
 pub enum Statement {
-    Return(i32),
+    Return(Expression),
+}
+
+#[derive(Debug)]
+pub enum Expression {
+    ConstInt(i32),
 }
 
 // Test piece for recursive Enum
@@ -33,7 +38,7 @@ pub fn parse_program<'a>(mut it: impl Iterator<Item = &'a CToken<'a>>) -> Result
     let tlc = if let Some(t) = it.next() {
         // First token must be Keyword("int")
         match t {
-            CToken::Keyword("int") => parse_function(ReturnType::Integer, it)?,
+            CToken::Keyword("int") => parse_function(ReturnType::Integer, &mut it)?,
             _ => bail!("Unexpected token {:?}", t),
         }
     } else {
@@ -64,39 +69,29 @@ fn parse_function<'a>(
     expect_consume_next_token(&mut it, CToken::OpenBrace)?;
 
     // Parse the function body - this will consume the '}'
-    let statement = parse_statement(it)?;
+    let statement = parse_statement(&mut it)?;
 
     Ok(TopLevelConstruct::Function(fn_name, rtype, statement))
 }
 
 fn parse_statement<'a>(mut it: impl Iterator<Item = &'a CToken<'a>>) -> Result<Statement> {
-    // Currently only expect "return 2;"
+    // Currently only expect "return <expression>;"
     expect_consume_next_token(&mut it, CToken::Keyword("return"))?;
-    let t = it.next();
-    let retval = match t {
-        Some(CToken::Integer(val)) => val,
-        _ => bail!("Expected integer return value, got {:?}", t),
-    };
+    let retval = parse_expression(&mut it)?;
     expect_consume_next_token(&mut it, CToken::SemiColon)?;
     expect_consume_next_token(&mut it, CToken::CloseBrace)?;
-    Ok(Statement::Return(*retval))
+    Ok(Statement::Return(retval))
 }
 
-// parse_statement
-// tok = tokens.next()
-// if tok.type != "RETURN_KEYWORD":
-//     fail()
-// tok = tokens.next()
-// if tok.type != "INT"
-//     fail()
-// exp = parse_exp(tokens) //parse_exp will pop off more tokens
-// statement = Return(exp)
-
-// tok = tokens.next()
-// if tok.type != "SEMICOLON":
-//     fail()
-
-// return statement
+fn parse_expression<'a>(mut it: impl Iterator<Item = &'a CToken<'a>>) -> Result<Expression> {
+    // Currently only expect an integer constant.
+    let t = it.next();
+    let const_int = match t {
+        Some(CToken::Integer(val)) => val,
+        _ => bail!("Expected integer constant, got {:?}", t),
+    };
+    Ok(Expression::ConstInt(*const_int))
+}
 
 fn expect_consume_next_token<'a>(
     it: &mut impl Iterator<Item = &'a CToken<'a>>,
