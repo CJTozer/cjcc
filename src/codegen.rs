@@ -21,11 +21,35 @@ fn codegen_function<'a>(name: &'a str, _rtype: &ReturnType, s: &'a Statement) ->
     code.push_str(&format!("{}:\n", name));
 
     match s {
-        Statement::Return(Expression::ConstInt(retval)) => {
-            code.push_str(&format!("    movl ${}, %eax\n", retval));
+        Statement::Return(exp) => {
+            code.push_str(&codegen_expression(exp));
             code.push_str(&format!("    ret\n"));
         },
-        _ => todo!(),
+    }
+
+    code
+}
+
+fn codegen_expression<'a>(exp: &'a Expression) -> String {
+    let mut code = String::new();
+    match exp {
+        Expression::ConstInt(retval) => {
+            code.push_str(&format!("    movl ${}, %eax\n", retval));
+        },
+        Expression::Negation(inner) => {
+            code.push_str(&codegen_expression(inner));
+            code.push_str("    neg %eax\n");
+        },
+        Expression::BitwiseComplement(inner) => {
+            code.push_str(&codegen_expression(inner));
+            code.push_str("    not %eax\n");
+        },
+        Expression::LogicalNegation(inner) => {
+            code.push_str(&codegen_expression(inner));
+            code.push_str("    cmpl $0, %eax\n");
+            code.push_str("    movl $0, %eax\n");
+            code.push_str("    sete %al\n");
+        },
     }
 
     code

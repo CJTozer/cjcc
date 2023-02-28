@@ -21,14 +21,14 @@ fn main() -> Result<()> {
 
     // Generate tokens by lexing
     let tokens = lex::lex_to_tokens(&input)?;
-    print!("\n** Tokens:\n");
-    println!("{:?}", tokens);
+    // print!("\n** Tokens:\n");
+    // println!("{:?}", tokens);
 
     // Build the AST from the tokens iterator
     let it = tokens.iter();
     let ast = parse::parse_program(it)?;
-    print!("\n** AST:\n");
-    println!("{:?}", ast);
+    // print!("\n** AST:\n");
+    // println!("{:?}", ast);
 
     // Generate code from the AST
     let code = codegen::emit_code(&ast);
