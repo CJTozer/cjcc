@@ -31,7 +31,17 @@ fn codegen_function<'a>(name: &'a str, _rtype: &ReturnType, s: &'a Statement) ->
 }
 
 fn codegen_expression<'a>(exp: &'a Expression) -> String {
-    todo!()
+    match exp {
+        Expression::Singleton(term) => codegen_term(term),
+        _ => todo!(),
+    }
+}
+
+fn codegen_term<'a>(term: &'a Term) -> String {
+    match term {
+        Term::Singleton(factor) => codegen_factor(factor),
+        _ => todo!(),
+    }
 }
 
 fn codegen_factor<'a>(exp: &'a Factor) -> String {
