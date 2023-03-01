@@ -1,11 +1,11 @@
 // Main tokenizer
 
 use anyhow::{bail, Result};
+use colored::Colorize;
 use nom::character::complete::{alphanumeric0, digit1, multispace1};
 use std::cmp::min;
-use colored::Colorize;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum CToken<'a> {
     // Keywords and identifiers
     Keyword(&'a str), // A keyword like 'int' or 'return'.  TODO these should be an enum of their own, not a string.
@@ -19,13 +19,13 @@ pub enum CToken<'a> {
     // Constants
     Integer(i32), // A number
     // Unary Operators
-    Minus, // - (can be negation or subtraction - for the parser to decide)
+    Minus,             // - (can be negation or subtraction - for the parser to decide)
     BitwiseComplement, // ~
-    LogicalNegation, // !
+    LogicalNegation,   // !
     // Binary Operators
     Multiplication, // *
-    Division, // /
-    Addition, // +
+    Division,       // /
+    Addition,       // +
     // Whitespace
     Whitespace,
 }
@@ -101,7 +101,12 @@ fn keyword_from_slice(s: &str) -> Option<(CToken, usize)> {
 fn identifier_token_from_slice(s: &str) -> Result<(CToken, usize)> {
     let (_, kw_slice) = alphanumeric0::<&str, ()>(s)?; // Ignoring error type (second parameterized type)
     match kw_slice.len() {
-        0 => bail!("Unexpected token '{}' when lexing:\n  {}\n  {}\n", &s[0..1], "⇩--- here".red(), &s[0..min(20, s.len())]),
+        0 => bail!(
+            "Unexpected token '{}' when lexing:\n  {}\n  {}\n",
+            &s[0..1],
+            "⇩--- here".red(),
+            &s[0..min(20, s.len())]
+        ),
         _ => Ok((CToken::Identifier(kw_slice), kw_slice.len())),
     }
 }
