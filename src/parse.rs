@@ -57,7 +57,6 @@ fn parse_function<'a>(
         bail!("Expected identifier, got {:?}", t);
     };
 
-    // TODO - bung these "expect one token" into a common function.
     // Only accept empty parens '()'
     expect_consume_next_token(&mut it, CToken::OpenParen)?;
     expect_consume_next_token(&mut it, CToken::CloseParen)?;
@@ -84,7 +83,7 @@ fn parse_expression<'a>(mut it: impl Iterator<Item = &'a CToken<'a>>) -> Result<
     let t = it.next();
     let exp = match t {
         Some(CToken::Integer(val)) => Expression::ConstInt(*val),
-        Some(CToken::Negation) => {
+        Some(CToken::Minus) => {
             let inner = parse_expression(it)?;
             Expression::Negation(Box::new(inner))
         },
