@@ -1,4 +1,4 @@
-use crate::lex::CToken;
+use crate::lex::{CToken, CTokenIterator};
 use anyhow::{bail, Result};
 use itertools::{put_back_n, Itertools, PutBackN};
 
@@ -9,10 +9,6 @@ use itertools::{put_back_n, Itertools, PutBackN};
 // <exp> ::= <term> { ("+" | "-") <term> }
 // <term> ::= <factor> { ("*" | "/") <factor> }
 // <factor> ::= "(" <exp> ")" | <unary_op> <factor> | <int>
-
-// Move to lex.rs?
-pub trait CTokenIterator<'a>: Iterator<Item = &'a CToken<'a>> + Clone {}
-impl<'a, I: Iterator<Item = &'a CToken<'a>> + Clone> CTokenIterator<'a> for I {}
 
 #[derive(Debug)]
 pub enum AST<'a> {
