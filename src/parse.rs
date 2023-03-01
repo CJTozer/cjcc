@@ -14,11 +14,6 @@ use itertools::{put_back_n, Itertools, PutBackN};
 pub trait CTokenIterator<'a>: Iterator<Item = &'a CToken<'a>> + Clone {}
 impl<'a, I: Iterator<Item = &'a CToken<'a>> + Clone> CTokenIterator<'a> for I {}
 
-// type TokenIterator<'a, I>
-// where
-//     I: Iterator<Item = &'a CToken<'a>> + Clone,
-// = PutBackN<I>;
-
 #[derive(Debug)]
 pub enum AST<'a> {
     Program(TopLevelConstruct<'a>),
@@ -126,6 +121,14 @@ fn parse_expression<'a>(it: &mut PutBackN<impl CTokenIterator<'a>>) -> Result<Ex
     // Always expects a Term first - so parse that
     let first_term = parse_term(it)?;
 
+    // Collect terms while they have the same precedence
+    collect_while_add_sub(it, first_term)
+}
+
+fn collect_while_add_sub<'a>(
+    it: &mut PutBackN<impl CTokenIterator<'a>>,
+    first_term: Term,
+) -> Result<Expression> {
     // Then if '*' or '/', grab that and parse the RHS Term
     // Otherwise back up the stack to the Statement
     Ok(match it.next() {
@@ -133,14 +136,21 @@ fn parse_expression<'a>(it: &mut PutBackN<impl CTokenIterator<'a>>) -> Result<Ex
             // TODO - collect all same-precedence operators - i.e. don't return the Expression::Addidition, but collect all terms until hitting a different precedence
             // e.g. 3 - 2 + 4 -> Addition(Difference(3, 2), 4) - i.e. left-associative.
             let second_term = parse_term(it)?;
-            Expression::Addition(first_term, second_term)
+            let new_first_term = Term::Singleton(Factor::Bracketed(Box::new(
+                Expression::Addition(first_term, second_term),
+            )));
+            collect_while_add_sub(it, new_first_term)?
         }
         Some(CToken::Minus) => {
             let second_term = parse_term(it)?;
-            Expression::Difference(first_term, second_term)
+            let new_first_term = Term::Singleton(Factor::Bracketed(Box::new(
+                Expression::Difference(first_term, second_term),
+            )));
+            collect_while_add_sub(it, new_first_term)?
         }
         Some(t) => {
             // Put back the last token
+            // Reached the end of the same precedence operators.
             it.put_back(t);
             Expression::Singleton(first_term)
         }
@@ -152,23 +162,37 @@ fn parse_term<'a>(it: &mut PutBackN<impl CTokenIterator<'a>>) -> Result<Term> {
     // Always expects a Factor first - so parse that
     let first_factor = parse_factor(it)?;
 
+    // Collect terms while they have the same precedence
+    collect_while_mul_div(it, first_factor)
+}
+
+fn collect_while_mul_div<'a>(
+    it: &mut PutBackN<impl CTokenIterator<'a>>,
+    first_factor: Factor,
+) -> Result<Term> {
     // Then if '*' or '/', grab that and parse the RHS Factor
     // Otherwise back up the stack to the Expression
     Ok(match it.next() {
         Some(CToken::Multiplication) => {
             let second_factor = parse_factor(it)?;
-            Term::Multiplication(first_factor, second_factor)
+            let new_first_factor = Factor::Bracketed(Box::new(Expression::Singleton(
+                Term::Multiplication(first_factor, second_factor),
+            )));
+            collect_while_mul_div(it, new_first_factor)?
         }
         Some(CToken::Division) => {
             let second_factor = parse_factor(it)?;
-            Term::Division(first_factor, second_factor)
+            let new_first_factor = Factor::Bracketed(Box::new(Expression::Singleton(
+                Term::Division(first_factor, second_factor),
+            )));
+            collect_while_mul_div(it, new_first_factor)?
         }
         Some(t) => {
             // Put back the last token
             it.put_back(t);
             Term::Singleton(first_factor)
         }
-        _ => bail!("Ran out of tokens parsing term"),
+        _ => bail!("Ran out of tokens parsing factor"),
     })
 }
 
