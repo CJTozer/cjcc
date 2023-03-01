@@ -213,9 +213,9 @@ fn parse_factor<'a>(it: &mut PutBackN<impl CTokenIterator<'a>>) -> Result<Factor
             let inner = parse_factor(it)?;
             Factor::LogicalNegation(Box::new(inner))
         }
-        Some(CToken::OpenBrace) => {
+        Some(CToken::OpenParen) => {
             let inner = parse_expression(it)?;
-            expect_consume_next_token(it, CToken::CloseBrace)?;
+            expect_consume_next_token(it, CToken::CloseParen)?;
             Factor::Bracketed(Box::new(inner))
         }
         _ => bail!("Expected integer constant, got {:?}", t),
