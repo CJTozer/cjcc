@@ -2,21 +2,30 @@ use crate::lex::{CToken, CTokenIterator};
 use anyhow::{bail, Result};
 use itertools::{put_back_n, Itertools, PutBackN};
 
-// Simplified for only the use-cases we have at any point
-// <program> ::= <function>
-// <function> ::= "int" <id> "(" ")" "{" <statement> "}"
-// <statement> ::= "return" <exp> ";"
-// <exp> ::= <term> { ("+" | "-") <term> }
-// <term> ::= <factor> { ("*" | "/") <factor> }
-// <factor> ::= "(" <exp> ")" | <unary_op> <factor> | <int>
+/// Simplified for only the use-cases we have at any point
+/// ```
+/// <program> ::= <function>
+/// <function> ::= "int" <id> "(" ")" "{" <statement> "}"
+/// <statement> ::= "return" <exp> ";"
+/// <exp> ::= <logical-and-exp> { "||" <logical-and-exp> }
+/// <logical-and-exp> ::= <equality-exp> { "&&" <equality-exp> }
+/// <equality-exp> ::= <relational-exp> { ("!=" | "==") <relational-exp> }
+/// <relational-exp> ::= <additive-exp> { ("<" | ">" | "<=" | ">=") <additive-exp> }
+/// <additive-exp> ::= <term> { ("+" | "-") <term> }
+/// <term> ::= <factor> { ("*" | "/") <factor> }
+/// <factor> ::= "(" <exp> ")" | <unary_op> <factor> | <int>
+/// <unary_op> ::= "!" | "~" | "-"
+/// ```
+
+// program = Program(function_declaration)
+// function_declaration = Function(string, statement) //string is the function name
+// statement = Return(exp)
+// exp = BinOp(binary_operator, exp, exp)
+//     | UnOp(unary_operator, exp)
+//     | Constant(int)
 
 #[derive(Debug)]
-pub enum AST<'a> {
-    Program(TopLevelConstruct<'a>),
-}
-
-#[derive(Debug)]
-pub enum TopLevelConstruct<'a> {
+pub enum Program<'a> {
     Function(&'a str, ReturnType, Statement),
 }
 
@@ -32,34 +41,30 @@ pub enum Statement {
 
 #[derive(Debug)]
 pub enum Expression {
-    Singleton(Term),
-    Addition(Term, Term),
-    Difference(Term, Term), // First - Last
+    UnOp(UnaryOperator, Box<Expression>),
+    BinOp(BinaryOperator, Box<Expression>, Box<Expression>),
+    Constant(i32),
 }
 
 #[derive(Debug)]
-pub enum Term {
-    Singleton(Factor),
-    Multiplication(Factor, Factor),
-    Division(Factor, Factor), // First factor is the numerator
+pub enum UnaryOperator {
+    Negation,
+    BitwiseComplement,
+    LogicalNegation,
 }
 
 #[derive(Debug)]
-pub enum Factor {
-    // A constant
-    ConstInt(i32),
-    // A single expression in brackets
-    Bracketed(Box<Expression>),
-    // Unary operator
-    Negation(Box<Factor>),
-    BitwiseComplement(Box<Factor>),
-    LogicalNegation(Box<Factor>),
+pub enum BinaryOperator {
+    Addition,
+    Difference,
+    Multiplication,
+    Division,
 }
 
-pub fn parse_program<'a>(it: impl CTokenIterator<'a>) -> Result<AST<'a>> {
+pub fn parse_program<'a>(it: impl CTokenIterator<'a>) -> Result<Program<'a>> {
     let mut it = put_back_n(it);
 
-    let tlc = if let Some(t) = it.next() {
+    let prog = if let Some(t) = it.next() {
         // First token must be Keyword("int")
         match t {
             CToken::Keyword("int") => parse_function(ReturnType::Integer, &mut it)?,
@@ -69,13 +74,15 @@ pub fn parse_program<'a>(it: impl CTokenIterator<'a>) -> Result<AST<'a>> {
         bail!("No tokens in program!");
     };
 
-    Ok(AST::Program(tlc))
+    Ok(prog)
 }
 
+// Currently returns a program, as the Function type isn't separated as all programs are
+// a single function...
 fn parse_function<'a>(
     rtype: ReturnType,
     it: &mut PutBackN<impl CTokenIterator<'a>>,
-) -> Result<TopLevelConstruct<'a>> {
+) -> Result<Program<'a>> {
     // Get the function name
     let t = it.next();
     let fn_name = if let Some(CToken::Identifier(name)) = t {
@@ -102,7 +109,7 @@ fn parse_function<'a>(
     // Consume the expected '}'
     expect_consume_next_token(it, CToken::CloseBrace)?;
 
-    Ok(TopLevelConstruct::Function(fn_name, rtype, statement))
+    Ok(Program::Function(fn_name, rtype, statement))
 }
 
 fn parse_statement<'a>(it: &mut PutBackN<impl CTokenIterator<'a>>) -> Result<Statement> {
@@ -123,38 +130,39 @@ fn parse_expression<'a>(it: &mut PutBackN<impl CTokenIterator<'a>>) -> Result<Ex
 
 fn collect_while_add_sub<'a>(
     it: &mut PutBackN<impl CTokenIterator<'a>>,
-    first_term: Term,
+    first_term: Expression,
 ) -> Result<Expression> {
-    // Then if '*' or '/', grab that and parse the RHS Term
-    // Otherwise back up the stack to the Statement
+    // Collect terms up until we don't get a '+' or '-' operator.
     Ok(match it.next() {
         Some(CToken::Addition) => {
-            // TODO - collect all same-precedence operators - i.e. don't return the Expression::Addidition, but collect all terms until hitting a different precedence
-            // e.g. 3 - 2 + 4 -> Addition(Difference(3, 2), 4) - i.e. left-associative.
             let second_term = parse_term(it)?;
-            let new_first_term = Term::Singleton(Factor::Bracketed(Box::new(
-                Expression::Addition(first_term, second_term),
-            )));
+            let new_first_term = Expression::BinOp(
+                BinaryOperator::Addition,
+                Box::new(first_term),
+                Box::new(second_term),
+            );
             collect_while_add_sub(it, new_first_term)?
         }
         Some(CToken::Minus) => {
             let second_term = parse_term(it)?;
-            let new_first_term = Term::Singleton(Factor::Bracketed(Box::new(
-                Expression::Difference(first_term, second_term),
-            )));
+            let new_first_term = Expression::BinOp(
+                BinaryOperator::Difference,
+                Box::new(first_term),
+                Box::new(second_term),
+            );
             collect_while_add_sub(it, new_first_term)?
         }
         Some(t) => {
             // Put back the last token
             // Reached the end of the same precedence operators.
             it.put_back(t);
-            Expression::Singleton(first_term)
+            first_term
         }
         _ => bail!("Ran out of tokens parsing expression"),
     })
 }
 
-fn parse_term<'a>(it: &mut PutBackN<impl CTokenIterator<'a>>) -> Result<Term> {
+fn parse_term<'a>(it: &mut PutBackN<impl CTokenIterator<'a>>) -> Result<Expression> {
     // Always expects a Factor first - so parse that
     let first_factor = parse_factor(it)?;
 
@@ -164,55 +172,59 @@ fn parse_term<'a>(it: &mut PutBackN<impl CTokenIterator<'a>>) -> Result<Term> {
 
 fn collect_while_mul_div<'a>(
     it: &mut PutBackN<impl CTokenIterator<'a>>,
-    first_factor: Factor,
-) -> Result<Term> {
+    first_factor: Expression,
+) -> Result<Expression> {
     // Then if '*' or '/', grab that and parse the RHS Factor
     // Otherwise back up the stack to the Expression
     Ok(match it.next() {
         Some(CToken::Multiplication) => {
             let second_factor = parse_factor(it)?;
-            let new_first_factor = Factor::Bracketed(Box::new(Expression::Singleton(
-                Term::Multiplication(first_factor, second_factor),
-            )));
+            let new_first_factor = Expression::BinOp(
+                BinaryOperator::Multiplication,
+                Box::new(first_factor),
+                Box::new(second_factor),
+            );
             collect_while_mul_div(it, new_first_factor)?
         }
         Some(CToken::Division) => {
             let second_factor = parse_factor(it)?;
-            let new_first_factor = Factor::Bracketed(Box::new(Expression::Singleton(
-                Term::Division(first_factor, second_factor),
-            )));
+            let new_first_factor = Expression::BinOp(
+                BinaryOperator::Division,
+                Box::new(first_factor),
+                Box::new(second_factor),
+            );
             collect_while_mul_div(it, new_first_factor)?
         }
         Some(t) => {
             // Put back the last token
             it.put_back(t);
-            Term::Singleton(first_factor)
+            first_factor
         }
         _ => bail!("Ran out of tokens parsing factor"),
     })
 }
 
-fn parse_factor<'a>(it: &mut PutBackN<impl CTokenIterator<'a>>) -> Result<Factor> {
+fn parse_factor<'a>(it: &mut PutBackN<impl CTokenIterator<'a>>) -> Result<Expression> {
     // Currently only expect an integer constant.
     let t = it.next();
     Ok(match t {
-        Some(CToken::Integer(val)) => Factor::ConstInt(*val),
+        Some(CToken::Integer(val)) => Expression::Constant(*val),
         Some(CToken::Minus) => {
             let inner = parse_factor(it)?;
-            Factor::Negation(Box::new(inner))
+            Expression::UnOp(UnaryOperator::Negation, Box::new(inner))
         }
         Some(CToken::BitwiseComplement) => {
             let inner = parse_factor(it)?;
-            Factor::BitwiseComplement(Box::new(inner))
+            Expression::UnOp(UnaryOperator::BitwiseComplement, Box::new(inner))
         }
         Some(CToken::LogicalNegation) => {
             let inner = parse_factor(it)?;
-            Factor::LogicalNegation(Box::new(inner))
+            Expression::UnOp(UnaryOperator::LogicalNegation, Box::new(inner))
         }
         Some(CToken::OpenParen) => {
             let inner = parse_expression(it)?;
             expect_consume_next_token(it, CToken::CloseParen)?;
-            Factor::Bracketed(Box::new(inner))
+            inner
         }
         _ => bail!("Expected integer constant, got {:?}", t),
     })

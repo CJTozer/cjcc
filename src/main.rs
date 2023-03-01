@@ -52,11 +52,13 @@ fn main() -> Result<()> {
     // Compile
     let mut path = PathBuf::from(file_path);
     let path2 = path.clone();
-    let bin = path2.file_stem().expect("DSDSD");
+    let bin = path2
+        .file_stem()
+        .expect("Could not calculate output binary");
     path.pop();
     path.push(bin);
 
-    // TODO Compile the code into the same folder as the input file
+    // Compile the code into the same folder as the input file
     // gcc -m32 assembly.s -o out
     if let Some(target) = path.to_str() {
         write!(debug, "** GCC:\n")?;
