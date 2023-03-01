@@ -3,6 +3,7 @@
 // (run with `cargo run ../write_a_compiler/stage_1/valid/return_2.c)
 
 use anyhow::Result;
+use std::io::Write;
 use std::path::PathBuf;
 use std::process::Command;
 use std::{env, fs};
@@ -17,23 +18,32 @@ fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
     let file_path = &args[1];
     let input = fs::read_to_string(file_path)?;
-    // let input = String::from("int main () {\n  return 12;\n}");
+
+    // Location for debug info
+    let debug_file = "/tmp/.cjcc.debug";
+    _ = fs::remove_file(debug_file); // Ignore errors here (e.g. if the file doesn't exist)
+    let mut debug = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(debug_file)?;
 
     // Generate tokens by lexing
     let tokens = lex::lex_to_tokens(&input)?;
-    // print!("\n** Tokens:\n");
-    // println!("{:?}", tokens);
+    write!(debug, "Compiling {}\n\n", file_path)?;
+    write!(debug, "** Tokens:\n")?;
+    write!(debug, "{:?}\n", tokens)?;
 
     // Build the AST from the tokens iterator
     let it = tokens.iter();
     let ast = parse::parse_program(it)?;
-    // print!("\n** AST:\n");
-    // println!("{:?}", ast);
+    write!(debug, "** AST:\n")?;
+    write!(debug, "{:?}\n\n", ast)?;
 
     // Generate code from the AST
     let code = codegen::emit_code(&ast);
-    // print!("\n** Code:\n");
-    // print!("{}", code);
+    write!(debug, "** Code:\n")?;
+    write!(debug, "{}", code)?;
+    write!(debug, "\n\n")?;
 
     // Write to a temporary location
     let tmp_loc = "/tmp/.cjcc.s";
@@ -49,15 +59,15 @@ fn main() -> Result<()> {
     // TODO Compile the code into the same folder as the input file
     // gcc -m32 assembly.s -o out
     if let Some(target) = path.to_str() {
-        // println!("{}", target);
-        let _gcc = Command::new("gcc")
+        write!(debug, "** GCC:\n")?;
+        let gcc = Command::new("gcc")
             .arg("-m32")
             .arg(tmp_loc)
             .arg("-o")
             .arg(target)
             .output()?;
 
-        // print!("{:?}", _gcc);
+        write!(debug, "{:?}\n\n", gcc)?;
     }
 
     Ok(())

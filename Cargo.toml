@@ -7,4 +7,6 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.69"
+colored = "2.0.0"
+itertools = "0.10.5"
 nom = "7.1.3"

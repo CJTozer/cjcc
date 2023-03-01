@@ -1,10 +1,11 @@
 // Main tokenizer
 
 use anyhow::{bail, Result};
+use colored::Colorize;
 use nom::character::complete::{alphanumeric0, digit1, multispace1};
 use std::cmp::min;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum CToken<'a> {
     // Keywords and identifiers
     Keyword(&'a str), // A keyword like 'int' or 'return'.  TODO these should be an enum of their own, not a string.
@@ -15,16 +16,22 @@ pub enum CToken<'a> {
     OpenBrace,  // {
     CloseBrace, // }
     SemiColon,  // ;
-    // Unary Operators
-    Negation, // -
-    BitwiseComplement, // ~
-    LogicalNegation, // !
     // Constants
     Integer(i32), // A number
-    // Operators
+    // Unary Operators
+    Minus,             // - (can be negation or subtraction - for the parser to decide)
+    BitwiseComplement, // ~
+    LogicalNegation,   // !
+    // Binary Operators
+    Multiplication, // *
+    Division,       // /
+    Addition,       // +
     // Whitespace
     Whitespace,
 }
+
+pub trait CTokenIterator<'a>: Iterator<Item = &'a CToken<'a>> + Clone {}
+impl<'a, I: Iterator<Item = &'a CToken<'a>> + Clone> CTokenIterator<'a> for I {}
 
 pub fn lex_to_tokens(data: &String) -> Result<Vec<CToken>> {
     let mut tokens = Vec::<CToken>::new();
@@ -56,8 +63,11 @@ fn next_token(data: &str) -> Result<(CToken, usize)> {
             ')' => Ok((CToken::CloseParen, 1)),
             ';' => Ok((CToken::SemiColon, 1)),
             '~' => Ok((CToken::BitwiseComplement, 1)),
-            '-' => Ok((CToken::Negation, 1)),
+            '-' => Ok((CToken::Minus, 1)),
             '!' => Ok((CToken::LogicalNegation, 1)),
+            '*' => Ok((CToken::Multiplication, 1)),
+            '/' => Ok((CToken::Division, 1)),
+            '+' => Ok((CToken::Addition, 1)),
             // Anything left (at this point, should be a keyword or identifier - we don't handle commas etc. yet)
             _ => keyword_or_identifier_from_slice(data),
         },
@@ -94,7 +104,12 @@ fn keyword_from_slice(s: &str) -> Option<(CToken, usize)> {
 fn identifier_token_from_slice(s: &str) -> Result<(CToken, usize)> {
     let (_, kw_slice) = alphanumeric0::<&str, ()>(s)?; // Ignoring error type (second parameterized type)
     match kw_slice.len() {
-        0 => bail!("Unexpected token:\n  {}", &s[0..min(20, s.len())]),
+        0 => bail!(
+            "Unexpected token '{}' when lexing:\n  {}\n  {}\n",
+            &s[0..1],
+            "⇩--- here".red(),
+            &s[0..min(20, s.len())]
+        ),
         _ => Ok((CToken::Identifier(kw_slice), kw_slice.len())),
     }
 }
