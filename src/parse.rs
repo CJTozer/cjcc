@@ -155,12 +155,10 @@ fn parse_term<'a>(it: &mut PutBackN<impl CTokenIterator<'a>>) -> Result<Term> {
     // Otherwise back up the stack to the Expression
     Ok(match it.next() {
         Some(CToken::Multiplication) => {
-            it.next(); // Skip over the '*'
             let second_factor = parse_factor(it)?;
             Term::Multiplication(first_factor, second_factor)
         }
         Some(CToken::Division) => {
-            it.next(); // Skip over the '/'
             let second_factor = parse_factor(it)?;
             Term::Division(first_factor, second_factor)
         }

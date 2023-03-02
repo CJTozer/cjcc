@@ -33,6 +33,15 @@ fn codegen_function<'a>(name: &'a str, _rtype: &ReturnType, s: &'a Statement) ->
 fn codegen_expression<'a>(exp: &'a Expression) -> String {
     match exp {
         Expression::Singleton(term) => codegen_term(term),
+        Expression::Addition(term_a, term_b) => {
+            let mut code = String::new();
+            code.push_str(&codegen_term(term_a));
+            code.push_str("    push %eax\n");
+            code.push_str(&codegen_term(term_b));
+            code.push_str("    pop %ecx\n");
+            code.push_str("    addl %ecx, %eax\n");
+            code
+        }
         _ => todo!(),
     }
 }
@@ -40,6 +49,15 @@ fn codegen_expression<'a>(exp: &'a Expression) -> String {
 fn codegen_term<'a>(term: &'a Term) -> String {
     match term {
         Term::Singleton(factor) => codegen_factor(factor),
+        Term::Multiplication(factor_a, factor_b) => {
+            let mut code = String::new();
+            code.push_str(&codegen_factor(factor_a));
+            code.push_str("    push %eax\n");
+            code.push_str(&codegen_factor(factor_b));
+            code.push_str("    pop %ecx\n");
+            code.push_str("    imul %ecx, %eax\n");
+            code
+        }
         _ => todo!(),
     }
 }
@@ -64,7 +82,7 @@ fn codegen_factor<'a>(exp: &'a Factor) -> String {
             code.push_str("    movl $0, %eax\n");
             code.push_str("    sete %al\n");
         }
-        Factor::Bracketed(inner) => todo!(),
+        Factor::Bracketed(inner) => code.push_str(&codegen_expression(inner)),
     }
 
     code
