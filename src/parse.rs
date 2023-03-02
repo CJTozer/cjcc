@@ -78,7 +78,6 @@ pub fn parse_program<'a>(it: impl CTokenIterator<'a>) -> Result<AST<'a>> {
         bail!("No tokens in program!");
     };
 
-    // TODO - actually parse this from the tokens!
     Ok(AST::Program(tlc))
 }
 
@@ -131,6 +130,8 @@ fn parse_expression<'a>(it: &mut PutBackN<impl CTokenIterator<'a>>) -> Result<Ex
     // Otherwise back up the stack to the Statement
     Ok(match it.next() {
         Some(CToken::Addition) => {
+            // TODO - collect all same-precedence operators - i.e. don't return the Expression::Addidition, but collect all terms until hitting a different precedence
+            // e.g. 3 - 2 + 4 -> Addition(Difference(3, 2), 4) - i.e. left-associative.
             let second_term = parse_term(it)?;
             Expression::Addition(first_term, second_term)
         }
