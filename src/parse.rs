@@ -62,6 +62,7 @@ pub enum BinaryOperator {
     LogicalOr,
     LogicalAnd,
     Equality,
+    NotEquality,
     GreaterThan,
     GreaterThanEq,
     LessThan,
@@ -213,6 +214,15 @@ fn collect_while_equality<'a>(
             let second_exp = parse_relational_expression(it)?;
             let new_first_exp = Expression::BinOp(
                 BinaryOperator::Equality,
+                Box::new(first_exp),
+                Box::new(second_exp),
+            );
+            collect_while_equality(it, new_first_exp)?
+        }
+        Some(CToken::LogicalNotEqual) => {
+            let second_exp = parse_relational_expression(it)?;
+            let new_first_exp = Expression::BinOp(
+                BinaryOperator::NotEquality,
                 Box::new(first_exp),
                 Box::new(second_exp),
             );

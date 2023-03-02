@@ -97,19 +97,47 @@ fn codegen_binop<'a>(
         }
         BinaryOperator::Equality => {
             // exp_a == exp_b
-            code.push_str(&codegen_expression(exp_a));
-            code.push_str("    push %eax\n");
-            code.push_str(&codegen_expression(exp_b));
-            code.push_str("    pop %ecx\n");
-            // Compare a and b - sets ZF flag
-            code.push_str("    cmpl %eax, %ecx\n");
-            // Zero out %eax
-            code.push_str("    movl $0, %eax\n");
-            // Set lower half of %eax to ZF
-            code.push_str("    sete %al\n");
+            code.push_str(&codegen_inequality("sete", exp_a, exp_b));
+        }
+        BinaryOperator::NotEquality => {
+            // exp_a == exp_b
+            code.push_str(&codegen_inequality("setne", exp_a, exp_b));
+        }
+        BinaryOperator::GreaterThan => {
+            // exp_a == exp_b
+            code.push_str(&codegen_inequality("setg", exp_a, exp_b));
+        }
+        BinaryOperator::GreaterThanEq => {
+            // exp_a == exp_b
+            code.push_str(&codegen_inequality("setge", exp_a, exp_b));
+        }
+        BinaryOperator::LessThan => {
+            // exp_a == exp_b
+            code.push_str(&codegen_inequality("setl", exp_a, exp_b));
+        }
+        BinaryOperator::LessThanEq => {
+            // exp_a == exp_b
+            code.push_str(&codegen_inequality("setle", exp_a, exp_b));
         }
         _ => todo!("Codegen for op {:?} not implemented", binop),
     }
+
+    code
+}
+
+fn codegen_inequality(set_instruction: &str, exp_a: &Expression, exp_b: &Expression) -> String {
+    let mut code = String::new();
+
+    code.push_str(&codegen_expression(exp_a));
+    code.push_str("    push %eax\n");
+    code.push_str(&codegen_expression(exp_b));
+    code.push_str("    pop %ecx\n");
+    // Compare a and b - sets comparison flag
+    code.push_str("    cmpl %eax, %ecx\n");
+    // Zero out %eax
+    code.push_str("    movl $0, %eax\n");
+    // Set lower half of %eax to match whichever flag was passed in
+    code.push_str(&format!("    {} %al\n", set_instruction));
 
     code
 }
