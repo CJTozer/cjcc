@@ -42,7 +42,16 @@ fn codegen_expression<'a>(exp: &'a Expression) -> String {
             code.push_str("    addl %ecx, %eax\n");
             code
         }
-        _ => todo!(),
+        Expression::Difference(term_a, term_b) => {
+            // term_a - term_b, and need term_a in %eax, do it second
+            let mut code = String::new();
+            code.push_str(&codegen_term(term_b));
+            code.push_str("    push %eax\n");
+            code.push_str(&codegen_term(term_a));
+            code.push_str("    pop %ecx\n");
+            code.push_str("    subl %ecx, %eax\n");
+            code
+        }
     }
 }
 
@@ -58,7 +67,18 @@ fn codegen_term<'a>(term: &'a Term) -> String {
             code.push_str("    imul %ecx, %eax\n");
             code
         }
-        _ => todo!(),
+        Term::Division(factor_a, factor_b) => {
+            // term_a / term_b, and need term_a in %eax, so do it second
+            let mut code = String::new();
+            code.push_str(&codegen_factor(factor_b));
+            code.push_str("    push %eax\n");
+            code.push_str(&codegen_factor(factor_a));
+            // Sign-extend %eax into %edx
+            code.push_str("    cdq\n");
+            code.push_str("    pop %ecx\n");
+            code.push_str("    idiv %ecx, %eax\n");
+            code
+        }
     }
 }
 
