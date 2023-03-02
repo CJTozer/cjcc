@@ -95,6 +95,19 @@ fn codegen_binop<'a>(
             code.push_str("    pop %ecx\n");
             code.push_str("    idiv %ecx, %eax\n");
         }
+        BinaryOperator::Equality => {
+            // exp_a == exp_b
+            code.push_str(&codegen_expression(exp_a));
+            code.push_str("    push %eax\n");
+            code.push_str(&codegen_expression(exp_b));
+            code.push_str("    pop %ecx\n");
+            // Compare a and b - sets ZF flag
+            code.push_str("    cmpl %eax, %ecx\n");
+            // Zero out %eax
+            code.push_str("    movl $0, %eax\n");
+            // Set lower half of %eax to ZF
+            code.push_str("    sete %al\n");
+        }
         _ => todo!("Codegen for op {:?} not implemented", binop),
     }
 
