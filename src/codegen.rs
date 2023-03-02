@@ -95,6 +95,7 @@ fn codegen_binop<'a>(
             code.push_str("    pop %ecx\n");
             code.push_str("    idiv %ecx, %eax\n");
         }
+        _ => todo!("Codegen for op {:?} not implemented", binop),
     }
 
     code

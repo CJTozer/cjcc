@@ -59,6 +59,13 @@ pub enum BinaryOperator {
     Difference,
     Multiplication,
     Division,
+    LogicalOr,
+    LogicalAnd,
+    Equality,
+    GreaterThan,
+    GreaterThanEq,
+    LessThan,
+    LessThanEq,
 }
 
 pub fn parse_program<'a>(it: impl CTokenIterator<'a>) -> Result<Program<'a>> {
@@ -121,6 +128,169 @@ fn parse_statement<'a>(it: &mut PutBackN<impl CTokenIterator<'a>>) -> Result<Sta
 }
 
 fn parse_expression<'a>(it: &mut PutBackN<impl CTokenIterator<'a>>) -> Result<Expression> {
+    // Always expects a Logical And Expression first - so parse that
+    let first_exp = parse_logical_and_expression(it)?;
+
+    // Collect terms while they have the same precedence
+    collect_while_logical_or(it, first_exp)
+}
+
+fn collect_while_logical_or<'a>(
+    it: &mut PutBackN<impl CTokenIterator<'a>>,
+    first_exp: Expression,
+) -> Result<Expression> {
+    // Collect terms up until we don't get a '||' operator.
+    Ok(match it.next() {
+        Some(CToken::LogicalOr) => {
+            let second_exp = parse_logical_and_expression(it)?;
+            let new_first_exp = Expression::BinOp(
+                BinaryOperator::LogicalOr,
+                Box::new(first_exp),
+                Box::new(second_exp),
+            );
+            collect_while_logical_or(it, new_first_exp)?
+        }
+        Some(t) => {
+            // Put back the last token
+            // Reached the end of the same precedence operators.
+            it.put_back(t);
+            first_exp
+        }
+        _ => bail!("Ran out of tokens parsing logical or expression"),
+    })
+}
+
+fn parse_logical_and_expression<'a>(
+    it: &mut PutBackN<impl CTokenIterator<'a>>,
+) -> Result<Expression> {
+    // Always expects an Equality Expression first - so parse that
+    let first_exp = parse_equality_expression(it)?;
+
+    // Collect terms while they have the same precedence
+    collect_while_logical_and(it, first_exp)
+}
+
+fn collect_while_logical_and<'a>(
+    it: &mut PutBackN<impl CTokenIterator<'a>>,
+    first_exp: Expression,
+) -> Result<Expression> {
+    // Collect terms up until we don't get a '&&' operator.
+    Ok(match it.next() {
+        Some(CToken::LogicalAnd) => {
+            let second_exp = parse_equality_expression(it)?;
+            let new_first_exp = Expression::BinOp(
+                BinaryOperator::LogicalAnd,
+                Box::new(first_exp),
+                Box::new(second_exp),
+            );
+            collect_while_logical_and(it, new_first_exp)?
+        }
+        Some(t) => {
+            // Put back the last token
+            // Reached the end of the same precedence operators.
+            it.put_back(t);
+            first_exp
+        }
+        _ => bail!("Ran out of tokens parsing logical and expression"),
+    })
+}
+
+fn parse_equality_expression<'a>(it: &mut PutBackN<impl CTokenIterator<'a>>) -> Result<Expression> {
+    // Always expects a Relational Expression first - so parse that
+    let first_exp = parse_relational_expression(it)?;
+
+    // Collect terms while they have the same precedence
+    collect_while_equality(it, first_exp)
+}
+
+fn collect_while_equality<'a>(
+    it: &mut PutBackN<impl CTokenIterator<'a>>,
+    first_exp: Expression,
+) -> Result<Expression> {
+    // Collect terms up until we don't get a '==' operator.
+    Ok(match it.next() {
+        Some(CToken::LogicalEqual) => {
+            let second_exp = parse_relational_expression(it)?;
+            let new_first_exp = Expression::BinOp(
+                BinaryOperator::Equality,
+                Box::new(first_exp),
+                Box::new(second_exp),
+            );
+            collect_while_equality(it, new_first_exp)?
+        }
+        Some(t) => {
+            // Put back the last token
+            // Reached the end of the same precedence operators.
+            it.put_back(t);
+            first_exp
+        }
+        _ => bail!("Ran out of tokens parsing logical equality expression"),
+    })
+}
+
+fn parse_relational_expression<'a>(
+    it: &mut PutBackN<impl CTokenIterator<'a>>,
+) -> Result<Expression> {
+    // Always expects an Additive Expression first - so parse that
+    let first_exp = parse_additive_expression(it)?;
+
+    // Collect terms while they have the same precedence
+    collect_while_relational(it, first_exp)
+}
+
+fn collect_while_relational<'a>(
+    it: &mut PutBackN<impl CTokenIterator<'a>>,
+    first_exp: Expression,
+) -> Result<Expression> {
+    // Collect terms up until we don't get a relational operator.
+    Ok(match it.next() {
+        Some(CToken::ComparisonGreaterThan) => {
+            let second_exp = parse_additive_expression(it)?;
+            let new_first_exp = Expression::BinOp(
+                BinaryOperator::GreaterThan,
+                Box::new(first_exp),
+                Box::new(second_exp),
+            );
+            collect_while_equality(it, new_first_exp)?
+        }
+        Some(CToken::ComparisonGreaterThanEq) => {
+            let second_exp = parse_additive_expression(it)?;
+            let new_first_exp = Expression::BinOp(
+                BinaryOperator::GreaterThanEq,
+                Box::new(first_exp),
+                Box::new(second_exp),
+            );
+            collect_while_equality(it, new_first_exp)?
+        }
+        Some(CToken::ComparisonLessThan) => {
+            let second_exp = parse_additive_expression(it)?;
+            let new_first_exp = Expression::BinOp(
+                BinaryOperator::LessThan,
+                Box::new(first_exp),
+                Box::new(second_exp),
+            );
+            collect_while_equality(it, new_first_exp)?
+        }
+        Some(CToken::ComparisonLessThanEq) => {
+            let second_exp = parse_additive_expression(it)?;
+            let new_first_exp = Expression::BinOp(
+                BinaryOperator::LessThanEq,
+                Box::new(first_exp),
+                Box::new(second_exp),
+            );
+            collect_while_equality(it, new_first_exp)?
+        }
+        Some(t) => {
+            // Put back the last token
+            // Reached the end of the same precedence operators.
+            it.put_back(t);
+            first_exp
+        }
+        _ => bail!("Ran out of tokens parsing logical equality expression"),
+    })
+}
+
+fn parse_additive_expression<'a>(it: &mut PutBackN<impl CTokenIterator<'a>>) -> Result<Expression> {
     // Always expects a Term first - so parse that
     let first_term = parse_term(it)?;
 
