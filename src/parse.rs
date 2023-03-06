@@ -26,7 +26,7 @@ use itertools::{put_back_n, Itertools, PutBackN};
 
 #[derive(Debug)]
 pub enum Program<'a> {
-    Function(&'a str, ReturnType, Statement),
+    Function(&'a str, ReturnType, Vec<Statement>),
 }
 
 #[derive(Debug)]
@@ -117,7 +117,7 @@ fn parse_function<'a>(
     // Consume the expected '}'
     expect_consume_next_token(it, CToken::CloseBrace)?;
 
-    Ok(Program::Function(fn_name, rtype, statement))
+    Ok(Program::Function(fn_name, rtype, vec![statement]))
 }
 
 fn parse_statement<'a>(it: &mut PutBackN<impl CTokenIterator<'a>>) -> Result<Statement> {

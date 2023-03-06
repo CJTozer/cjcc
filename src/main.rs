@@ -21,7 +21,7 @@ fn main() -> Result<()> {
 
     // Location for debug info
     let debug_file = "/tmp/.cjcc.debug";
-    _ = fs::remove_file(debug_file); // Ignore errors here (e.g. if the file doesn't exist)
+    // _ = fs::remove_file(debug_file); // Ignore errors here (e.g. if the file doesn't exist)
     let mut debug = fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -29,6 +29,7 @@ fn main() -> Result<()> {
 
     // Generate tokens by lexing
     let tokens = lex::lex_to_tokens(&input)?;
+    write!(debug, "\n=======================\n\n")?;
     write!(debug, "Compiling {}\n\n", file_path)?;
     write!(debug, "** Tokens:\n")?;
     write!(debug, "{:?}\n", tokens)?;

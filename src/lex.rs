@@ -34,6 +34,8 @@ pub enum CToken<'a> {
     ComparisonGreaterThan,   // >
     ComparisonLessThanEq,    // <=
     ComparisonGreaterThanEq, // >=
+    // Assignment
+    Assignment, // =
     // Whitespace
     Whitespace,
 }
@@ -123,7 +125,7 @@ fn parse_equals_token(data: &str) -> Result<(CToken, usize)> {
     // Already know first char is '='
     match data.chars().nth(1) {
         Some('=') => Ok((CToken::LogicalEqual, 2)),
-        Some(t) => bail!("Unexpected token ={}", t),
+        Some(_) => Ok((CToken::Assignment, 1)),
         _ => bail!("Unexpected EOF after ="),
     }
 }

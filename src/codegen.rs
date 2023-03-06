@@ -12,15 +12,17 @@ pub fn emit_code<'a>(prog: &'a Program<'a>) -> String {
 
 // TODO pass around a mutable string reference rather than creating new ones and pushing those...
 
-fn codegen_function<'a>(name: &'a str, _rtype: &ReturnType, s: &'a Statement) -> String {
+fn codegen_function<'a>(name: &'a str, _rtype: &ReturnType, ss: &'a Vec<Statement>) -> String {
     let mut code = String::new();
     code.push_str(&format!("    .globl {}\n", name));
     code.push_str(&format!("{}:\n", name));
 
-    match s {
-        Statement::Return(exp) => {
-            code.push_str(&codegen_expression(exp));
-            code.push_str(&format!("    ret\n"));
+    for s in ss {
+        match s {
+            Statement::Return(exp) => {
+                code.push_str(&codegen_expression(exp));
+                code.push_str(&format!("    ret\n"));
+            }
         }
     }
 
