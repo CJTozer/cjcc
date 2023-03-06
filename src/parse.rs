@@ -146,11 +146,49 @@ fn parse_function<'a>(
 }
 
 fn parse_statement<'a>(it: &mut PutBackN<impl CTokenIterator<'a>>) -> Result<Statement> {
-    // Currently only expect "return <expression>;"
-    expect_consume_next_token(it, CToken::Keyword("return"))?;
-    let retval = parse_expression(it)?;
-    expect_consume_next_token(it, CToken::SemiColon)?;
-    Ok(Statement::Return(retval))
+    // Can be a return statement, a variable declaration, or an expression.
+    Ok(match it.next() {
+        Some(CToken::Keyword("return")) => {
+            // Return expression
+            let exp = parse_expression(it)?;
+            expect_consume_next_token(it, CToken::SemiColon)?;
+            Statement::Return(exp)
+        }
+        Some(CToken::Keyword("int")) => {
+            // Variable assignment
+            match it.next() {
+                Some(CToken::Identifier(varname)) => {
+                    // TODO validate this variable hasn't already been declared.
+                    // There may or may not be an expression following the declaration to set the value.
+                    match it.next() {
+                        Some(CToken::SemiColon) => {
+                            todo!("No statement, declare the the value as undefined")
+                        }
+                        Some(t) => {
+                            it.put_back(t);
+                            let exp = parse_expression(it)?;
+                            expect_consume_next_token(it, CToken::SemiColon)?;
+                            Statement::Declare(varname.to_string(), exp)
+                        }
+                        _ => bail!(
+                            "Ran out of tokens parsing variable {} declaration.",
+                            varname
+                        ),
+                    }
+                }
+                Some(t) => bail!("Unexpected token {:?} at start of variable declaration.", t),
+                _ => bail!("Ran out of tokens parsing variable declaration"),
+            }
+        }
+        Some(t) => {
+            // A "normal expression".
+            it.put_back(t);
+            let exp = parse_expression(it)?;
+            expect_consume_next_token(it, CToken::SemiColon)?;
+            Statement::Exp(exp)
+        }
+        _ => bail!("Ran out of tokens parsing statement"),
+    })
 }
 
 fn parse_expression<'a>(it: &mut PutBackN<impl CTokenIterator<'a>>) -> Result<Expression> {
