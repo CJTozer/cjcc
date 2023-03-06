@@ -44,7 +44,6 @@ impl CodegenContext {
     }
 }
 
-// AST can currently only have one form: Program(Function("main", Integer, Return(12)))
 pub fn emit_code<'a>(prog: &'a Program) -> String {
     let mut cxt = CodegenContext::new();
     match prog {

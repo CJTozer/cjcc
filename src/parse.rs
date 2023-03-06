@@ -39,7 +39,6 @@ pub mod parser {
         let mut it = put_back_n(it);
 
         let prog = if let Some(t) = it.next() {
-            // First token must be Keyword("int")
             match t {
                 CToken::Keyword("int") => parse_function(ReturnType::Integer, &mut it)?,
                 _ => bail!("Unexpected token {:?}", t),
@@ -87,6 +86,13 @@ pub mod parser {
                     fn_name
                 ),
             }
+        }
+
+        // If there is no return statement at the end of the function, return zero.
+        match statements.last() {
+            Some(Statement::Return(_)) => { // A return statement already exists at the end
+            }
+            _ => statements.push(Statement::Return(Expression::Constant(0))),
         }
 
         Ok(Program::Function(fn_name.to_string(), rtype, statements))
