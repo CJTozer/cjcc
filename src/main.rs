@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::{env, fs};
 
+mod ast;
 mod codegen;
 mod lex;
 mod parse;

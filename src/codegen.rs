@@ -1,4 +1,4 @@
-use crate::parse::{BinaryOperator, Expression, Program, ReturnType, Statement, UnaryOperator};
+use crate::ast::{BinaryOperator, Expression, Program, ReturnType, Statement, UnaryOperator};
 
 // Todo use an atomic or something
 static mut GLOBAL_ID: i32 = 0;
