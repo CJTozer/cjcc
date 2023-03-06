@@ -24,12 +24,12 @@ trace::init_depth_var!();
 /// ```
 
 pub fn parse<'a>(it: impl CTokenIterator<'a>) -> Result<Program> {
-    parse::parse_program(it)
+    parser::parse_program(it)
 }
 
 /// <program> ::= <function>
 // #[trace]
-pub mod parse {
+pub mod parser {
     use crate::ast::{BinaryOperator, Expression, Program, ReturnType, Statement, UnaryOperator};
     use crate::lex::{CToken, CTokenIterator};
     use anyhow::{bail, Result};
@@ -115,11 +115,13 @@ pub mod parse {
                                 Statement::Declare(varname.to_string(), None)
                             }
                             // Variable given a value
-                            Some(t) => {
-                                it.put_back(t);
+                            Some(CToken::Assignment) => {
                                 let exp = parse_expression(it)?;
                                 expect_consume_next_token(it, CToken::SemiColon)?;
                                 Statement::Declare(varname.to_string(), Some(exp))
+                            }
+                            Some(t) => {
+                                bail!("Unexpected token {:?} when parsing assignment for {} (expecting '=' or ';'", t, varname)
                             }
                             _ => bail!(
                                 "Ran out of tokens parsing variable {} declaration.",
@@ -435,7 +437,6 @@ pub mod parse {
     fn parse_factor<'a>(it: &mut PutBackN<impl CTokenIterator<'a>>) -> Result<Expression> {
         // Currently only expect an integer constant.
         let t = it.next();
-        println!("parse_factor: {:?}", t);
         Ok(match t {
             Some(CToken::Integer(val)) => Expression::Constant(*val),
             Some(CToken::Minus) => {
