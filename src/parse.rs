@@ -115,6 +115,23 @@ fn parse_function<'a>(
         .collect::<Vec<&CToken>>();
     let mut body_tokens = put_back_n(body_tokens_refs.iter().map(|x| *x));
 
+    // Parse statements until the next token is the end of function '}'.
+    let mut statements = Vec::new();
+    loop {
+        match it.next() {
+            Some(x) if *x == CToken::CloseBrace => break,
+            Some(t) => {
+                it.put_back(t);
+                let s = parse_statement(it)?;
+                statements.push(s);
+            }
+            _ => bail!(
+                "Ran out of tokens parsing statements in function: {}",
+                fn_name
+            ),
+        }
+    }
+
     // Function bodies are a single statement for now
     let statement = parse_statement(&mut body_tokens)?;
 
