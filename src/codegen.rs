@@ -4,7 +4,7 @@ use crate::parse::{BinaryOperator, Expression, Program, ReturnType, Statement, U
 static mut GLOBAL_ID: i32 = 0;
 
 // AST can currently only have one form: Program(Function("main", Integer, Return(12)))
-pub fn emit_code<'a>(prog: &'a Program<'a>) -> String {
+pub fn emit_code<'a>(prog: &'a Program) -> String {
     match prog {
         Program::Function(name, rtype, func) => codegen_function(name, rtype, func),
     }
@@ -20,9 +20,10 @@ fn codegen_function<'a>(name: &'a str, _rtype: &ReturnType, ss: &'a Vec<Statemen
     for s in ss {
         match s {
             Statement::Return(exp) => {
-                code.push_str(&codegen_expression(exp));
+                code.push_str(&codegen_expression(&exp));
                 code.push_str(&format!("    ret\n"));
             }
+            _ => todo!(),
         }
     }
 

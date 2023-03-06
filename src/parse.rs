@@ -20,13 +20,15 @@ use itertools::{put_back_n, Itertools, PutBackN};
 // program = Program(function_declaration)
 // function_declaration = Function(string, statement) //string is the function name
 // statement = Return(exp)
+//           | Declare(string, exp option) // string is variable name, exp is optional initializer
+//           | Exp(exp)
 // exp = BinOp(binary_operator, exp, exp)
 //     | UnOp(unary_operator, exp)
 //     | Constant(int)
 
 #[derive(Debug)]
-pub enum Program<'a> {
-    Function(&'a str, ReturnType, Vec<Statement>),
+pub enum Program {
+    Function(String, ReturnType, Vec<Statement>),
 }
 
 #[derive(Debug)]
@@ -36,7 +38,9 @@ pub enum ReturnType {
 
 #[derive(Debug)]
 pub enum Statement {
+    Declare(String, Expression),
     Return(Expression),
+    Exp(Expression),
 }
 
 #[derive(Debug)]
@@ -69,7 +73,7 @@ pub enum BinaryOperator {
     LessThanEq,
 }
 
-pub fn parse_program<'a>(it: impl CTokenIterator<'a>) -> Result<Program<'a>> {
+pub fn parse_program<'a>(it: impl CTokenIterator<'a>) -> Result<Program> {
     let mut it = put_back_n(it);
 
     let prog = if let Some(t) = it.next() {
@@ -90,7 +94,7 @@ pub fn parse_program<'a>(it: impl CTokenIterator<'a>) -> Result<Program<'a>> {
 fn parse_function<'a>(
     rtype: ReturnType,
     it: &mut PutBackN<impl CTokenIterator<'a>>,
-) -> Result<Program<'a>> {
+) -> Result<Program> {
     // Get the function name
     let t = it.next();
     let fn_name = if let Some(CToken::Identifier(name)) = t {
@@ -117,7 +121,11 @@ fn parse_function<'a>(
     // Consume the expected '}'
     expect_consume_next_token(it, CToken::CloseBrace)?;
 
-    Ok(Program::Function(fn_name, rtype, vec![statement]))
+    Ok(Program::Function(
+        fn_name.to_string(),
+        rtype,
+        vec![statement],
+    ))
 }
 
 fn parse_statement<'a>(it: &mut PutBackN<impl CTokenIterator<'a>>) -> Result<Statement> {
