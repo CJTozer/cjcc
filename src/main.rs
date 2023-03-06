@@ -37,7 +37,7 @@ fn main() -> Result<()> {
 
     // Build the AST from the tokens iterator
     let it = tokens.iter();
-    let ast = parse::parse_program(it)?;
+    let ast = parse::parse(it)?;
     write!(debug, "** AST:\n")?;
     write!(debug, "{:?}\n\n", ast)?;
 

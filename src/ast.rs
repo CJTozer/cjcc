@@ -1,26 +1,18 @@
-/// Simplified for only the use-cases we have at any point
-/// ```
-/// <program> ::= <function>
-/// <function> ::= "int" <id> "(" ")" "{" <statement> "}"
-/// <statement> ::= "return" <exp> ";"
-/// <exp> ::= <logical-and-exp> { "||" <logical-and-exp> }
-/// <logical-and-exp> ::= <equality-exp> { "&&" <equality-exp> }
-/// <equality-exp> ::= <relational-exp> { ("!=" | "==") <relational-exp> }
-/// <relational-exp> ::= <additive-exp> { ("<" | ">" | "<=" | ">=") <additive-exp> }
-/// <additive-exp> ::= <term> { ("+" | "-") <term> }
-/// <term> ::= <factor> { ("*" | "/") <factor> }
-/// <factor> ::= "(" <exp> ")" | <unary_op> <factor> | <int>
-/// <unary_op> ::= "!" | "~" | "-"
-/// ```
-
-// program = Program(function_declaration)
-// function_declaration = Function(string, statement) //string is the function name
-// statement = Return(exp)
-//           | Declare(string, exp option) // string is variable name, exp is optional initializer
-//           | Exp(exp)
-// exp = BinOp(binary_operator, exp, exp)
-//     | UnOp(unary_operator, exp)
 //     | Constant(int)
+/// ```
+/// program = Program(function_declaration)
+/// function_declaration = Function(string, statement list) //string is the function name
+///
+/// statement = Return(exp)
+///           | Declare(string, exp option) //string is variable name
+///                                         //exp is optional initializer
+///           | Exp(exp)
+/// exp = Assign(string, exp)
+///     | Var(string) //string is variable name
+///     | BinOp(binary_operator, exp, exp)
+///     | UnOp(unary_operator, exp)
+///     | Constant(int)
+/// ```
 
 #[derive(Debug)]
 pub enum Program {
@@ -34,15 +26,17 @@ pub enum ReturnType {
 
 #[derive(Debug)]
 pub enum Statement {
-    Declare(String, Expression),
     Return(Expression),
+    Declare(String, Option<Expression>),
     Exp(Expression),
 }
 
 #[derive(Debug)]
 pub enum Expression {
-    UnOp(UnaryOperator, Box<Expression>),
+    Assign(String, Box<Expression>), // Assign a value to a variable
+    Var(String),                     // Just a variable name
     BinOp(BinaryOperator, Box<Expression>, Box<Expression>),
+    UnOp(UnaryOperator, Box<Expression>),
     Constant(i32),
 }
 

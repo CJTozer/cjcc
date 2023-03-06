@@ -32,9 +32,11 @@ fn codegen_function<'a>(name: &'a str, _rtype: &ReturnType, ss: &'a Vec<Statemen
 
 fn codegen_expression<'a>(exp: &'a Expression) -> String {
     match exp {
-        Expression::Constant(c) => codegen_constant(*c),
-        Expression::UnOp(unop, exp) => codegen_unop(unop, exp),
+        Expression::Assign(varname, exp) => todo!("Codegen for Expression::Assign"),
+        Expression::Var(varname) => todo!("codegen for Expression::Var"),
         Expression::BinOp(binop, exp_a, exp_b) => codegen_binop(binop, exp_a, exp_b),
+        Expression::UnOp(unop, exp) => codegen_unop(unop, exp),
+        Expression::Constant(c) => codegen_constant(*c),
     }
 }
 

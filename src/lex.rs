@@ -40,8 +40,8 @@ pub enum CToken<'a> {
     Whitespace,
 }
 
-pub trait CTokenIterator<'a>: Iterator<Item = &'a CToken<'a>> + Clone {}
-impl<'a, I: Iterator<Item = &'a CToken<'a>> + Clone> CTokenIterator<'a> for I {}
+pub trait CTokenIterator<'a>: Iterator<Item = &'a CToken<'a>> + Clone + std::fmt::Debug {}
+impl<'a, I: Iterator<Item = &'a CToken<'a>> + Clone + std::fmt::Debug> CTokenIterator<'a> for I {}
 
 pub fn lex_to_tokens(data: &String) -> Result<Vec<CToken>> {
     let mut tokens = Vec::<CToken>::new();
