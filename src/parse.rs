@@ -25,8 +25,6 @@ trace::init_depth_var!();
 /// ```
 
 // TODO
-// - Create a parser "class"
-// - ...and make the iterator part of the class so you can stop passing it around
 // - Use context from lexing to produce better errors (make a new module for that)s
 // - Add context to the AST so that codegen issues can have better errors
 // - Add some proper tests
