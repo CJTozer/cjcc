@@ -46,9 +46,6 @@ pub enum CToken<'a> {
 // - Take a look how you might build this into a state machine
 // - Add some proper tests
 
-pub trait CTokenIterator<'a>: Iterator<Item = &'a CToken<'a>> + Clone + std::fmt::Debug {}
-impl<'a, I: Iterator<Item = &'a CToken<'a>> + Clone + std::fmt::Debug> CTokenIterator<'a> for I {}
-
 pub fn lex_to_tokens(data: &String) -> Result<Vec<CToken>> {
     let mut tokens = Vec::<CToken>::new();
     let mut data_slice = &data[0..];
