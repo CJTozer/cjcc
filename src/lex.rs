@@ -34,12 +34,20 @@ pub enum CToken<'a> {
     ComparisonGreaterThan,   // >
     ComparisonLessThanEq,    // <=
     ComparisonGreaterThanEq, // >=
+    // Assignment
+    Assignment, // =
     // Whitespace
     Whitespace,
 }
 
-pub trait CTokenIterator<'a>: Iterator<Item = &'a CToken<'a>> + Clone {}
-impl<'a, I: Iterator<Item = &'a CToken<'a>> + Clone> CTokenIterator<'a> for I {}
+// TODO
+// - make the lexer a "class"
+// - store context with the tokens (line number etc. so error messages can be more helpful)
+// - Take a look how you might build this into a state machine
+// - Add some proper tests
+
+pub trait CTokenIterator<'a>: Iterator<Item = &'a CToken<'a>> + Clone + std::fmt::Debug {}
+impl<'a, I: Iterator<Item = &'a CToken<'a>> + Clone + std::fmt::Debug> CTokenIterator<'a> for I {}
 
 pub fn lex_to_tokens(data: &String) -> Result<Vec<CToken>> {
     let mut tokens = Vec::<CToken>::new();
@@ -123,7 +131,7 @@ fn parse_equals_token(data: &str) -> Result<(CToken, usize)> {
     // Already know first char is '='
     match data.chars().nth(1) {
         Some('=') => Ok((CToken::LogicalEqual, 2)),
-        Some(t) => bail!("Unexpected token ={}", t),
+        Some(_) => Ok((CToken::Assignment, 1)),
         _ => bail!("Unexpected EOF after ="),
     }
 }

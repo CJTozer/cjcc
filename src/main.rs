@@ -8,9 +8,16 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::{env, fs};
 
+mod ast;
 mod codegen;
 mod lex;
 mod parse;
+
+// TODO
+// - add tests for the remaining "stage 4" operators: %, &, |, ^, <<, >>
+// - ...then add support for them
+// - add tests for the remaining "stage 5" operators: +=, -=, /=, *=, %=, <<=, >>=, &=, |=, ^=
+// - ...then add support for them
 
 // Entrypoint
 fn main() -> Result<()> {
@@ -21,7 +28,7 @@ fn main() -> Result<()> {
 
     // Location for debug info
     let debug_file = "/tmp/.cjcc.debug";
-    _ = fs::remove_file(debug_file); // Ignore errors here (e.g. if the file doesn't exist)
+    // _ = fs::remove_file(debug_file); // Ignore errors here (e.g. if the file doesn't exist)
     let mut debug = fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -29,13 +36,14 @@ fn main() -> Result<()> {
 
     // Generate tokens by lexing
     let tokens = lex::lex_to_tokens(&input)?;
+    write!(debug, "\n=======================\n\n")?;
     write!(debug, "Compiling {}\n\n", file_path)?;
     write!(debug, "** Tokens:\n")?;
     write!(debug, "{:?}\n", tokens)?;
 
     // Build the AST from the tokens iterator
     let it = tokens.iter();
-    let ast = parse::parse_program(it)?;
+    let ast = parse::parse(it)?;
     write!(debug, "** AST:\n")?;
     write!(debug, "{:?}\n\n", ast)?;
 
