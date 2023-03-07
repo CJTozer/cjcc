@@ -1,15 +1,17 @@
-// Main tokenizer
-
+/// Main tokenizer
 use anyhow::{bail, Result};
 use colored::Colorize;
 use nom::character::complete::{alphanumeric0, digit1, multispace1};
 use std::cmp::min;
+use std::fmt;
+use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum CToken<'a> {
+pub enum CToken {
     // Keywords and identifiers
-    Keyword(&'a str), // A keyword like 'int' or 'return'.  TODO these should be an enum of their own, not a string.
-    Identifier(&'a str), // Variable, function, parameter name etc.
+    Keyword(CKeyWord),  // A keyword like 'int' or 'return'.
+    Identifier(String), // Variable, function, parameter name etc.
     // Syntax
     OpenParen,  // (
     CloseParen, // )
@@ -40,28 +42,50 @@ pub enum CToken<'a> {
     Whitespace,
 }
 
+#[derive(EnumIter, Debug, PartialEq, Clone)]
+pub enum CKeyWord {
+    Int,
+    Return,
+}
+
+impl fmt::Display for CKeyWord {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CKeyWord::Int => write!(f, "int"),
+            CKeyWord::Return => write!(f, "return"),
+        }
+    }
+}
+
 // TODO
-// - make the lexer a "class"
-// - store context with the tokens (line number etc. so error messages can be more helpful)
+// - Store context with the tokens (line number etc. so error messages can be more helpful)
 // - Take a look how you might build this into a state machine
 // - Add some proper tests
 
-pub fn lex_to_tokens(data: &String) -> Result<Vec<CToken>> {
-    let mut tokens = Vec::<CToken>::new();
-    let mut data_slice = &data[0..];
-    let mut bytes_read = 0;
+pub struct Lexer {}
 
-    while data_slice.len() > 0 {
-        let (token, bytes) = next_token(data_slice)?;
-        if let CToken::Whitespace = token {
-            // Don't bother storing whitespace
-        } else {
-            tokens.push(token);
-        }
-        bytes_read += bytes;
-        data_slice = &data[bytes_read..]
+impl Lexer {
+    pub fn new() -> Lexer {
+        Lexer {}
     }
-    Ok(tokens)
+
+    pub fn lex_to_tokens<'a>(&'a self, data: &'a String) -> Result<Vec<CToken>> {
+        let mut tokens = Vec::<CToken>::new();
+        let mut data_slice = &data[0..];
+        let mut bytes_read = 0;
+
+        while data_slice.len() > 0 {
+            let (token, bytes) = next_token(data_slice)?;
+            if let CToken::Whitespace = token {
+                // Don't bother storing whitespace
+            } else {
+                tokens.push(token);
+            }
+            bytes_read += bytes;
+            data_slice = &data[bytes_read..]
+        }
+        Ok(tokens)
+    }
 }
 
 fn next_token(data: &str) -> Result<(CToken, usize)> {
@@ -157,16 +181,18 @@ fn keyword_or_identifier_from_slice(s: &str) -> Result<(CToken, usize)> {
 }
 
 fn keyword_from_slice(s: &str) -> Option<(CToken, usize)> {
-    // TODO Grab the list of keywords from somewhere and iterate them neatly!
-    for kw in vec!["int", "return"] {
-        if s.starts_with(kw) {
-            if let Some(c) = s.chars().nth(kw.len()) {
+    // Try to match a keyword before assuming this is an identifier
+    for kw in CKeyWord::iter() {
+        let kw_str = kw.to_string();
+        if s.starts_with(&kw_str) {
+            if let Some(c) = s.chars().nth(kw_str.len()) {
                 if !c.is_alphanumeric() {
-                    return Some((CToken::Keyword(&s[0..kw.len()]), kw.len()));
+                    return Some((CToken::Keyword(kw), kw_str.len()));
                 }
             }
         }
     }
+
     None
 }
 
@@ -179,7 +205,7 @@ fn identifier_token_from_slice(s: &str) -> Result<(CToken, usize)> {
             "⇩--- here".red(),
             &s[0..min(20, s.len())]
         ),
-        _ => Ok((CToken::Identifier(kw_slice), kw_slice.len())),
+        _ => Ok((CToken::Identifier(kw_slice.to_string()), kw_slice.len())),
     }
 }
 

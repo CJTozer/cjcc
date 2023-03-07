@@ -3,6 +3,7 @@
 // (run with `cargo run ../write_a_compiler/stage_1/valid/return_2.c)
 
 use crate::codegen::Codegen;
+use crate::lex::Lexer;
 use crate::parse::Parser;
 use anyhow::Result;
 use std::io::Write;
@@ -37,14 +38,15 @@ fn main() -> Result<()> {
         .open(debug_file)?;
 
     // Generate tokens by lexing
-    let tokens = lex::lex_to_tokens(&input)?;
+    let lexer = Lexer::new();
+    let tokens = lexer.lex_to_tokens(&input)?;
     write!(debug, "\n=======================\n\n")?;
     write!(debug, "Compiling {}\n\n", file_path)?;
     write!(debug, "** Tokens:\n")?;
     write!(debug, "{:?}\n", tokens)?;
 
     // Build the AST from the tokens iterator
-    let it = tokens.iter();
+    let it = tokens.into_iter();
     let mut parser = Parser::new(it);
     let ast = parser.parse()?;
     write!(debug, "** AST:\n")?;
