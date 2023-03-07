@@ -3,6 +3,7 @@
 // (run with `cargo run ../write_a_compiler/stage_1/valid/return_2.c)
 
 use anyhow::Result;
+use codegen::Codegen;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::Command;
@@ -48,7 +49,8 @@ fn main() -> Result<()> {
     write!(debug, "{:?}\n\n", ast)?;
 
     // Generate code from the AST
-    let code = codegen::emit_code(&ast);
+    let mut codegen = Codegen::new();
+    let code = codegen.emit_code(&ast);
     write!(debug, "** Code:\n")?;
     write!(debug, "{}", code)?;
     write!(debug, "\n\n")?;
