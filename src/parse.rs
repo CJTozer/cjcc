@@ -23,6 +23,13 @@ trace::init_depth_var!();
 /// <unary_op> ::= "!" | "~" | "-"
 /// ```
 
+// TODO
+// - Create a parser "class"
+// - ...and make the iterator part of the class so you can stop passing it around
+// - Use context from lexing to produce better errors (make a new module for that)s
+// - Add context to the AST so that codegen issues can have better errors
+// - Add some proper tests
+
 pub fn parse<'a>(it: impl CTokenIterator<'a>) -> Result<Program> {
     parser::parse_program(it)
 }

@@ -1,6 +1,10 @@
 use crate::ast::{BinaryOperator, Expression, Program, ReturnType, Statement, UnaryOperator};
 use std::collections::HashMap;
 
+// TODO
+// - make a CodeGen "class" so the context can just live there.
+// - Add some proper tests
+
 struct CodegenContext {
     global_id: i32,
     /// The next available index on the stack.  When %ebp == %esp, this is initially -4.

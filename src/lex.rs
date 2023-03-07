@@ -40,6 +40,12 @@ pub enum CToken<'a> {
     Whitespace,
 }
 
+// TODO
+// - make the lexer a "class"
+// - store context with the tokens (line number etc. so error messages can be more helpful)
+// - Take a look how you might build this into a state machine
+// - Add some proper tests
+
 pub trait CTokenIterator<'a>: Iterator<Item = &'a CToken<'a>> + Clone + std::fmt::Debug {}
 impl<'a, I: Iterator<Item = &'a CToken<'a>> + Clone + std::fmt::Debug> CTokenIterator<'a> for I {}
 
