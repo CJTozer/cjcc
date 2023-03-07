@@ -26,14 +26,23 @@ impl Codegen {
         }
     }
 
-    pub fn next_id(&mut self) -> i32 {
+    pub fn emit_code(&mut self, prog: &Program) -> &str {
+        // Currently a program is a single function
+        match prog {
+            Program::Function(name, rtype, func) => self.codegen_function(name, rtype, func),
+        }
+
+        &self.code
+    }
+
+    fn next_id(&mut self) -> i32 {
         let next_id;
         next_id = self.global_id;
         self.global_id += 1;
         next_id
     }
 
-    pub fn declare_variable(&mut self, var: String) {
+    fn declare_variable(&mut self, var: String) {
         if self.variables.contains_key(&var) {
             panic!("Variable {} already defined", var);
         } else {
@@ -43,22 +52,14 @@ impl Codegen {
         }
     }
 
-    pub fn get_stack_index(&self, var: &String) -> i32 {
+    fn get_stack_index(&self, var: &String) -> i32 {
         match self.variables.get(var) {
             Some(offset) => *offset,
             _ => panic!("Attempt to use uninitialized variable {}", var),
         }
     }
 
-    pub fn emit_code<'a>(&'a mut self, prog: &Program) -> &'a str {
-        match prog {
-            Program::Function(name, rtype, func) => self.codegen_function(name, rtype, func),
-        }
-
-        &self.code
-    }
-
-    fn codegen_function<'a>(&mut self, name: &'a str, _rtype: &ReturnType, ss: &'a Vec<Statement>) {
+    fn codegen_function(&mut self, name: &str, _rtype: &ReturnType, ss: &Vec<Statement>) {
         self.code.push_str(&format!("    .globl {}\n", name));
         self.code.push_str(&format!("{}:\n", name));
 
@@ -138,7 +139,7 @@ impl Codegen {
             .push_str(&format!("    movl {}(%ebp), %eax\n", stack_index));
     }
 
-    fn codegen_unop<'a>(&mut self, unop: &'a UnaryOperator, exp: &'a Expression) {
+    fn codegen_unop(&mut self, unop: &UnaryOperator, exp: &Expression) {
         match unop {
             UnaryOperator::Negation => {
                 self.codegen_expression(&*exp);
@@ -157,12 +158,7 @@ impl Codegen {
         }
     }
 
-    fn codegen_binop<'a>(
-        &mut self,
-        binop: &'a BinaryOperator,
-        exp_a: &'a Expression,
-        exp_b: &'a Expression,
-    ) {
+    fn codegen_binop(&mut self, binop: &BinaryOperator, exp_a: &Expression, exp_b: &Expression) {
         match binop {
             BinaryOperator::Addition => {
                 self.codegen_expression(exp_a);

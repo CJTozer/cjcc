@@ -41,27 +41,34 @@ pub enum CToken<'a> {
 }
 
 // TODO
-// - make the lexer a "class"
-// - store context with the tokens (line number etc. so error messages can be more helpful)
+// - Store context with the tokens (line number etc. so error messages can be more helpful)
 // - Take a look how you might build this into a state machine
 // - Add some proper tests
 
-pub fn lex_to_tokens(data: &String) -> Result<Vec<CToken>> {
-    let mut tokens = Vec::<CToken>::new();
-    let mut data_slice = &data[0..];
-    let mut bytes_read = 0;
+pub struct Lexer {}
 
-    while data_slice.len() > 0 {
-        let (token, bytes) = next_token(data_slice)?;
-        if let CToken::Whitespace = token {
-            // Don't bother storing whitespace
-        } else {
-            tokens.push(token);
-        }
-        bytes_read += bytes;
-        data_slice = &data[bytes_read..]
+impl Lexer {
+    pub fn new() -> Lexer {
+        Lexer {}
     }
-    Ok(tokens)
+
+    pub fn lex_to_tokens<'a>(&'a self, data: &'a String) -> Result<Vec<CToken>> {
+        let mut tokens = Vec::<CToken>::new();
+        let mut data_slice = &data[0..];
+        let mut bytes_read = 0;
+
+        while data_slice.len() > 0 {
+            let (token, bytes) = next_token(data_slice)?;
+            if let CToken::Whitespace = token {
+                // Don't bother storing whitespace
+            } else {
+                tokens.push(token);
+            }
+            bytes_read += bytes;
+            data_slice = &data[bytes_read..]
+        }
+        Ok(tokens)
+    }
 }
 
 fn next_token(data: &str) -> Result<(CToken, usize)> {
