@@ -1,5 +1,5 @@
 use crate::ast::{BinaryOperator, Expression, Program, ReturnType, Statement, UnaryOperator};
-use crate::lex::CToken;
+use crate::lex::{CKeyWord, CToken};
 use anyhow::{bail, Result};
 use itertools::{put_back_n, PutBackN};
 use trace::trace;
@@ -29,16 +29,16 @@ trace::init_depth_var!();
 // - Add context to the AST so that codegen issues can have better errors
 // - Add some proper tests
 
-pub struct Parser<'a, I: Iterator<Item = &'a CToken<'a>>> {
+pub struct Parser<I: Iterator<Item = CToken>> {
     it: PutBackN<I>,
 }
 
 // #[trace]
-impl<'a, I> Parser<'a, I>
+impl<I> Parser<I>
 where
-    I: Iterator<Item = &'a CToken<'a>>,
+    I: Iterator<Item = CToken>,
 {
-    pub fn new(raw_it: I) -> Parser<'a, I> {
+    pub fn new(raw_it: I) -> Parser<I> {
         Parser {
             it: put_back_n(raw_it),
         }
@@ -52,8 +52,8 @@ where
     pub fn parse_program(&mut self) -> Result<Program> {
         let prog = if let Some(t) = self.it.next() {
             match t {
-                CToken::Keyword("int") => self.parse_function(ReturnType::Integer)?,
-                _ => bail!("Unexpected token {:?}", t),
+                CToken::Keyword(CKeyWord::Int) => self.parse_function(ReturnType::Integer)?,
+                _ => bail!("Unexpected token {:?} to start function", t),
             }
         } else {
             bail!("No tokens in program!");
@@ -112,13 +112,13 @@ where
     fn parse_statement(&mut self) -> Result<Statement> {
         // Can be a return statement, a variable declaration, or an expression.
         Ok(match self.it.next() {
-            Some(CToken::Keyword("return")) => {
+            Some(CToken::Keyword(CKeyWord::Return)) => {
                 // Return expression
                 let exp = self.parse_expression()?;
                 self.expect_consume_next_token(CToken::SemiColon)?;
                 Statement::Return(exp)
             }
-            Some(CToken::Keyword("int")) => {
+            Some(CToken::Keyword(CKeyWord::Int)) => {
                 // Variable declaration
                 match self.it.next() {
                     Some(CToken::Identifier(varname)) => {
@@ -424,7 +424,7 @@ where
         // Currently only expect an integer constant.
         let t = self.it.next();
         Ok(match t {
-            Some(CToken::Integer(val)) => Expression::Constant(*val),
+            Some(CToken::Integer(val)) => Expression::Constant(val),
             Some(CToken::Minus) => {
                 let inner = self.parse_factor()?;
                 Expression::UnOp(UnaryOperator::Negation, Box::new(inner))
@@ -449,7 +449,7 @@ where
 
     fn expect_consume_next_token(&mut self, exp_tok: CToken) -> Result<()> {
         Ok(match self.it.next() {
-            Some(x) if *x == exp_tok => (),
+            Some(x) if x == exp_tok => (),
             Some(t) => bail!("Unexpected token - expected {:?} got {:?}", exp_tok, t),
             _ => bail!("Ran out of tokens, expecting {:?}", exp_tok),
         })

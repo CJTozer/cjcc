@@ -239,7 +239,6 @@ impl Codegen {
                 self.code.push_str(&format!("    {}:\n", end_label));
             }
             BinaryOperator::LogicalAnd => {
-                // TODO get new labels which are unique
                 let this_id = self.next_id();
                 let end_label = format!("_end{}", this_id);
                 // exp_a && exp_b - must short-circuit if exp_a is false.

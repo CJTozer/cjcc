@@ -46,7 +46,7 @@ fn main() -> Result<()> {
     write!(debug, "{:?}\n", tokens)?;
 
     // Build the AST from the tokens iterator
-    let it = tokens.iter();
+    let it = tokens.into_iter();
     let mut parser = Parser::new(it);
     let ast = parser.parse()?;
     write!(debug, "** AST:\n")?;
