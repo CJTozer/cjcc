@@ -19,7 +19,7 @@ trace::init_depth_var!();
 /// <equality-exp> ::= <relational-exp> { ("!=" | "==") <relational-exp> }
 /// <relational-exp> ::= <additive-exp> { ("<" | ">" | "<=" | ">=") <additive-exp> }
 /// <additive-exp> ::= <term> { ("+" | "-") <term> }
-/// <term> ::= <factor> { ("*" | "/") <factor> }
+/// <term> ::= <factor> { ("*" | "/" | "%") <factor> }
 /// <factor> ::= "(" <exp> ")" | <unary_op> <factor> | <int> | <id>
 /// <unary_op> ::= "!" | "~" | "-"
 /// ```
@@ -378,7 +378,7 @@ where
         })
     }
 
-    /// <term> ::= <factor> { ("*" | "/") <factor> }
+    /// <term> ::= <factor> { ("*" | "/" | "%") <factor> }
     fn parse_term(&mut self) -> Result<Expression> {
         // Always expects a Factor first - so parse that
         let first_factor = self.parse_factor()?;
@@ -404,6 +404,15 @@ where
                 let second_factor = self.parse_factor()?;
                 let new_first_factor = Expression::BinOp(
                     BinaryOperator::Division,
+                    Box::new(first_factor),
+                    Box::new(second_factor),
+                );
+                self.collect_while_mul_div(new_first_factor)?
+            }
+            Some(CToken::Modulo) => {
+                let second_factor = self.parse_factor()?;
+                let new_first_factor = Expression::BinOp(
+                    BinaryOperator::Modulo,
                     Box::new(first_factor),
                     Box::new(second_factor),
                 );

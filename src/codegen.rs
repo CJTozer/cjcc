@@ -192,6 +192,18 @@ impl Codegen {
                 self.code.push_str("    pop %ecx\n");
                 self.code.push_str("    idiv %ecx, %eax\n");
             }
+            BinaryOperator::Modulo => {
+                // exp_a % exp_b
+                // Same as division but the remainder is in %edx
+                self.codegen_expression(exp_b);
+                self.code.push_str("    push %eax\n");
+                self.codegen_expression(exp_a);
+                // Sign-extend %eax into %edx
+                self.code.push_str("    cdq\n");
+                self.code.push_str("    pop %ecx\n");
+                self.code.push_str("    idiv %ecx, %eax\n");
+                self.code.push_str("    movl %edx, %eax\n")
+            }
             BinaryOperator::Equality => {
                 // exp_a == exp_b
                 self.codegen_inequality("sete", exp_a, exp_b);

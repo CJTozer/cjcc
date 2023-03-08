@@ -27,6 +27,7 @@ pub enum CToken {
     // Binary Operators
     Multiplication,          // *
     Division,                // /
+    Modulo,                  // %
     Addition,                // +
     LogicalAnd,              // &&
     LogicalOr,               // ||
@@ -104,6 +105,7 @@ fn next_token(data: &str) -> Result<(CToken, usize)> {
             '!' => parse_pling_token(data),
             '*' => Ok((CToken::Multiplication, 1)),
             '/' => Ok((CToken::Division, 1)),
+            '%' => Ok((CToken::Modulo, 1)),
             '+' => Ok((CToken::Addition, 1)),
             '&' => parse_ampersand_token(data),
             '|' => parse_bar_token(data),

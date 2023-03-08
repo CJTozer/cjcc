@@ -53,6 +53,7 @@ pub enum BinaryOperator {
     Difference,
     Multiplication,
     Division,
+    Modulo,
     LogicalOr,
     LogicalAnd,
     Equality,
