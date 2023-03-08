@@ -234,10 +234,30 @@ where
         self.collect_matching_binary_operators(Self::parse_logical_and_expression, map)
     }
 
-    /// <logical-and-exp> ::= <equality-exp> { "&&" <equality-exp> }
+    /// <logical-and-exp> ::= <bitwise-or-exp> { "&&" <bitwise-or-exp> }
     fn parse_logical_and_expression(&mut self) -> Result<Expression> {
         let mut map = HashMap::new();
         map.insert(CToken::LogicalAnd, BinaryOperator::LogicalAnd);
+        self.collect_matching_binary_operators(Self::parse_bitwise_or_expression, map)
+    }
+    /// <bitwise-or-exp> ::= <bitwise-xor-exp> { "|" <bitwise-xor-exp> }
+    fn parse_bitwise_or_expression(&mut self) -> Result<Expression> {
+        let mut map = HashMap::new();
+        map.insert(CToken::BitwiseOr, BinaryOperator::BitwiseOr);
+        self.collect_matching_binary_operators(Self::parse_bitwise_xor_expression, map)
+    }
+
+    /// <bitwise-xor-exp> ::= <bitwise-and-exp> { "|" <bitwise-and-exp> }
+    fn parse_bitwise_xor_expression(&mut self) -> Result<Expression> {
+        let mut map = HashMap::new();
+        map.insert(CToken::BitwiseXor, BinaryOperator::BitwiseXor);
+        self.collect_matching_binary_operators(Self::parse_bitwise_and_expression, map)
+    }
+
+    /// <bitwise-and-exp> ::= <equality-exp> { "|" <equality-exp> }
+    fn parse_bitwise_and_expression(&mut self) -> Result<Expression> {
+        let mut map = HashMap::new();
+        map.insert(CToken::BitwiseAnd, BinaryOperator::BitwiseAnd);
         self.collect_matching_binary_operators(Self::parse_equality_expression, map)
     }
 
