@@ -17,7 +17,7 @@ mod lex;
 mod parse;
 
 // TODO
-// - add tests for the remaining "stage 4" operators: %, &, |, ^, <<, >>
+// - add tests for the remaining "stage 4" operators: &, |, ^, <<, >>
 // - ...then add support for them
 // - add tests for the remaining "stage 5" operators: +=, -=, /=, *=, %=, <<=, >>=, &=, |=, ^=, comma, ++, -- (both prefix and postfix)
 // - ...then add support for them

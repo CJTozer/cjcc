@@ -192,6 +192,9 @@ impl Codegen {
                 self.code.push_str("    pop %ecx\n");
                 self.code.push_str("    idiv %ecx, %eax\n");
             }
+            BinaryOperator::BitwiseAnd => todo!(),
+            BinaryOperator::BitwiseXor => todo!(),
+            BinaryOperator::BitwiseOr => todo!(),
             BinaryOperator::Modulo => {
                 // exp_a % exp_b
                 // Same as division but the remainder is in %edx

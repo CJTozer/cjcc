@@ -7,7 +7,7 @@ use std::fmt;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub enum CToken {
     // Keywords and identifiers
     Keyword(CKeyWord),  // A keyword like 'int' or 'return'.
@@ -33,6 +33,9 @@ pub enum CToken {
     LogicalOr,               // ||
     LogicalEqual,            // ==
     LogicalNotEqual,         // !=
+    BitwiseAnd,              // &
+    BitwiseXor,              // ^
+    BitwiseOr,               // |
     ComparisonLessThan,      // <
     ComparisonGreaterThan,   // >
     ComparisonLessThanEq,    // <=
@@ -43,7 +46,7 @@ pub enum CToken {
     Whitespace,
 }
 
-#[derive(EnumIter, Debug, PartialEq, Clone)]
+#[derive(EnumIter, Debug, PartialEq, Clone, Hash, Eq)]
 pub enum CKeyWord {
     Int,
     Return,

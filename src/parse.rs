@@ -2,6 +2,7 @@ use crate::ast::{BinaryOperator, Expression, Program, ReturnType, Statement, Una
 use crate::lex::{CKeyWord, CToken};
 use anyhow::{bail, Result};
 use itertools::{put_back_n, PutBackN};
+use std::collections::HashMap;
 use trace::trace;
 
 trace::init_depth_var!();
@@ -15,7 +16,10 @@ trace::init_depth_var!();
 ///               | "int" <id> [ = <exp>] ";"
 /// <exp> ::= <id> "=" <exp> | <logical-or-exp>
 /// <logical-or-exp> ::= <logical-and-exp> { "||" <logical-and-exp> }
-/// <logical-and-exp> ::= <equality-exp> { "&&" <equality-exp> }
+/// <logical-and-exp> ::= <bitwise-or-exp> { "&&" <bitwise-or-exp> }
+/// <bitwise-or-exp> ::= <bitwise-xor-exp> { "|" <bitwise-xor-exp> }
+/// <bitwise-xor-exp> ::= <bitwise-and-exp> { "|" <bitwise-and-exp> }
+/// <bitwise-and-exp> ::= <equality-exp> { "|" <equality-exp> }
 /// <equality-exp> ::= <relational-exp> { ("!=" | "==") <relational-exp> }
 /// <relational-exp> ::= <additive-exp> { ("<" | ">" | "<=" | ">=") <additive-exp> }
 /// <additive-exp> ::= <term> { ("+" | "-") <term> }
@@ -178,26 +182,76 @@ where
         })
     }
 
-    /// <logical-or-exp> ::= <logical-and-exp> { "||" <logical-and-exp> }
     fn parse_logical_or_expression(&mut self) -> Result<Expression> {
-        // Always expects a Logical And Expression first - so parse that
-        let first_exp = self.parse_logical_and_expression()?;
-
-        // Collect terms while they have the same precedence
-        self.collect_while_logical_or(first_exp)
+        // TODO - declare these all statically.
+        let mut map = HashMap::new();
+        map.insert(CToken::LogicalOr, BinaryOperator::LogicalOr);
+        self.collect_matching_binary_operators(Self::parse_logical_and_expression, map)
     }
 
-    fn collect_while_logical_or(&mut self, first_exp: Expression) -> Result<Expression> {
-        // Collect terms up until we don't get a '||' operator.
+    // /// <logical-or-exp> ::= <logical-and-exp> { "||" <logical-and-exp> }
+    // fn parse_logical_or_expression(&mut self) -> Result<Expression> {
+    //     // Always expects a Logical And Expression first - so parse that
+    //     let first_exp = self.parse_logical_and_expression()?;
+
+    //     // Collect terms while they have the same precedence
+    //     self.collect_while_logical_or(first_exp)
+    // }
+
+    // fn collect_while_logical_or(&mut self, first_exp: Expression) -> Result<Expression> {
+    //     // Collect terms up until we don't get a '||' operator.
+    //     Ok(match self.it.next() {
+    //         Some(CToken::LogicalOr) => {
+    //             let second_exp = self.parse_logical_and_expression()?;
+    //             let new_first_exp = Expression::BinOp(
+    //                 BinaryOperator::LogicalOr,
+    //                 Box::new(first_exp),
+    //                 Box::new(second_exp),
+    //             );
+    //             self.collect_while_logical_or(new_first_exp)?
+    //         }
+    //         Some(t) => {
+    //             // Put back the last token
+    //             // Reached the end of the same precedence operators.
+    //             self.it.put_back(t);
+    //             first_exp
+    //         }
+    //         _ => bail!("Ran out of tokens parsing logical or expression"),
+    //     })
+    // }
+
+    /// Passing in the mapping of CToken to BinaryOperator for the BinOp expression, as well as the function to parse the "next layer"
+    fn collect_matching_binary_operators<F>(
+        &mut self,
+        mut func: F,
+        map: HashMap<CToken, BinaryOperator>,
+    ) -> Result<Expression>
+    where
+        F: FnMut(&mut Self) -> Result<Expression>,
+    {
+        // Parse the first expression
+        let first_exp = func(self)?;
+
+        // Call inner function to grap any subsequent matches of the same precedence
+        self.collect_matching_binary_operators_inner(func, map, first_exp)
+    }
+
+    fn collect_matching_binary_operators_inner<F>(
+        &mut self,
+        mut func: F,
+        map: HashMap<CToken, BinaryOperator>,
+        first_exp: Expression,
+    ) -> Result<Expression>
+    where
+        F: FnMut(&mut Self) -> Result<Expression>,
+    {
         Ok(match self.it.next() {
-            Some(CToken::LogicalOr) => {
-                let second_exp = self.parse_logical_and_expression()?;
-                let new_first_exp = Expression::BinOp(
-                    BinaryOperator::LogicalOr,
-                    Box::new(first_exp),
-                    Box::new(second_exp),
-                );
-                self.collect_while_logical_or(new_first_exp)?
+            Some(t) if map.contains_key(&t) => {
+                let binop = map.get(&t).unwrap();
+                let second_exp = func(self)?;
+                let new_first_exp =
+                    Expression::BinOp(*binop, Box::new(first_exp), Box::new(second_exp));
+                self.collect_matching_binary_operators_inner(func, map, new_first_exp)?
             }
             Some(t) => {
                 // Put back the last token
@@ -250,7 +304,7 @@ where
     }
 
     fn collect_while_equality(&mut self, first_exp: Expression) -> Result<Expression> {
-        // Collect terms up until we don't get a '==' operator.
+        // Collect terms up until we don't get a '==' or '!=' operator.
         Ok(match self.it.next() {
             Some(CToken::LogicalEqual) => {
                 let second_exp = self.parse_relational_expression()?;
