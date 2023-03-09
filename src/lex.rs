@@ -36,6 +36,8 @@ pub enum CToken {
     BitwiseAnd,              // &
     BitwiseXor,              // ^
     BitwiseOr,               // |
+    ShiftLeft,               // <<
+    ShiftRight,              // >>
     ComparisonLessThan,      // <
     ComparisonGreaterThan,   // >
     ComparisonLessThanEq,    // <=
@@ -167,6 +169,7 @@ fn parse_gt_token(data: &str) -> Result<(CToken, usize)> {
     // Already know first char is '>'
     match data.chars().nth(1) {
         Some('=') => Ok((CToken::ComparisonGreaterThanEq, 2)),
+        Some('>') => Ok((CToken::ShiftRight, 2)),
         _ => Ok((CToken::ComparisonGreaterThan, 1)),
     }
 }
@@ -175,6 +178,7 @@ fn parse_lt_token(data: &str) -> Result<(CToken, usize)> {
     // Already know first char is '>'
     match data.chars().nth(1) {
         Some('=') => Ok((CToken::ComparisonLessThanEq, 2)),
+        Some('<') => Ok((CToken::ShiftLeft, 2)),
         _ => Ok((CToken::ComparisonLessThan, 1)),
     }
 }

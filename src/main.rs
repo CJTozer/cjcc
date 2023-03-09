@@ -77,7 +77,6 @@ fn main() -> Result<()> {
     if let Some(target) = path.to_str() {
         write!(debug, "** GCC:\n")?;
         let gcc = Command::new("gcc")
-            .arg("-m32")
             .arg(tmp_loc)
             .arg("-o")
             .arg(target)

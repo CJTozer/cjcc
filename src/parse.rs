@@ -21,7 +21,8 @@ trace::init_depth_var!();
 /// <bitwise-xor-exp> ::= <bitwise-and-exp> { "|" <bitwise-and-exp> }
 /// <bitwise-and-exp> ::= <equality-exp> { "|" <equality-exp> }
 /// <equality-exp> ::= <relational-exp> { ("!=" | "==") <relational-exp> }
-/// <relational-exp> ::= <additive-exp> { ("<" | ">" | "<=" | ">=") <additive-exp> }
+/// <relational-exp> ::= <shift-exp> { ("<" | ">" | "<=" | ">=") <shift-exp> }
+/// <shift-exp> ::= <additive-exp> { ("<<" | ">>") <additive-exp> }
 /// <additive-exp> ::= <term> { ("+" | "-") <term> }
 /// <term> ::= <factor> { ("*" | "/" | "%") <factor> }
 /// <factor> ::= "(" <exp> ")" | <unary_op> <factor> | <int> | <id>
@@ -269,7 +270,7 @@ where
         self.collect_matching_binary_operators(Self::parse_relational_expression, map)
     }
 
-    /// <relational-exp> ::= <additive-exp> { ("<" | ">" | "<=" | ">=") <additive-exp> }
+    /// <relational-exp> ::= <shift-exp> { ("<" | ">" | "<=" | ">=") <shift-exp> }
     fn parse_relational_expression(&mut self) -> Result<Expression> {
         let mut map = HashMap::new();
         map.insert(CToken::ComparisonGreaterThan, BinaryOperator::GreaterThan);
@@ -279,6 +280,14 @@ where
         );
         map.insert(CToken::ComparisonLessThan, BinaryOperator::LessThan);
         map.insert(CToken::ComparisonLessThanEq, BinaryOperator::LessThanEq);
+        self.collect_matching_binary_operators(Self::parse_shift_expression, map)
+    }
+
+    /// <shift-exp> ::= <additive-exp> { ("<<" | ">>") <additive-exp> }
+    fn parse_shift_expression(&mut self) -> Result<Expression> {
+        let mut map = HashMap::new();
+        map.insert(CToken::ShiftLeft, BinaryOperator::ShiftLeft);
+        map.insert(CToken::ShiftRight, BinaryOperator::ShiftRight);
         self.collect_matching_binary_operators(Self::parse_additive_expression, map)
     }
 

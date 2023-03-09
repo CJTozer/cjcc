@@ -57,6 +57,8 @@ pub enum BinaryOperator {
     BitwiseAnd,
     BitwiseXor,
     BitwiseOr,
+    ShiftLeft,
+    ShiftRight,
     LogicalOr,
     LogicalAnd,
     Equality,
