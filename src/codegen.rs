@@ -217,20 +217,20 @@ impl Codegen {
                 self.code.push_str("    xor %rcx, %rax\n");
             }
             BinaryOperator::ShiftLeft => {
-                // exp_a << exp_b - exp_b ends up in %rax before the SHLX, exp_a in %rcx
-                self.codegen_expression(exp_a);
-                self.code.push_str("    push %rax\n");
+                // exp_a << exp_b - exp_b ends up in %rcx before the SHLX, exp_a in %rax
                 self.codegen_expression(exp_b);
+                self.code.push_str("    push %rax\n");
+                self.codegen_expression(exp_a);
                 self.code.push_str("    pop %rcx\n");
-                self.code.push_str("    shlx %rax, %rcx, %rax\n");
+                self.code.push_str("    shl %cl, %rax\n");
             }
             BinaryOperator::ShiftRight => {
-                // exp_a << exp_b - exp_b ends up in %rax before the SHRX, exp_a in %rcx
-                self.codegen_expression(exp_a);
-                self.code.push_str("    push %rax\n");
+                // exp_a << exp_b - exp_b ends up in %rcx before the SHR, exp_a in %rax
                 self.codegen_expression(exp_b);
+                self.code.push_str("    push %rax\n");
+                self.codegen_expression(exp_a);
                 self.code.push_str("    pop %rcx\n");
-                self.code.push_str("    shrx %rax, %rcx, %rax\n");
+                self.code.push_str("    shr %cl, %rax\n");
             }
             BinaryOperator::Modulo => {
                 // exp_a % exp_b
