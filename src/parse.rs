@@ -1,19 +1,21 @@
-use crate::ast::{BinaryOperator, Expression, Program, ReturnType, Statement, UnaryOperator};
+use crate::ast::{
+    BinaryOperator, BlockItem, Declaration, Expression, Program, ReturnType, Statement,
+    UnaryOperator,
+};
 use crate::lex::{CKeyWord, CToken};
 use anyhow::{bail, Result};
 use itertools::{put_back_n, PutBackN};
 use std::collections::HashMap;
-use trace::trace;
-
-trace::init_depth_var!();
 
 /// Simplified for only the use-cases we have at any point
 /// ```
 /// <program> ::= <function>
-/// <function> ::= "int" <id> "(" ")" "{" { <statement> } "}"
+/// <function> ::= "int" <id> "(" ")" "{" { <block-item> } "}"
 /// <statement> ::= "return" <exp> ";"
 ///               | <exp> ";"
-///               | "int" <id> [ = <exp>] ";"
+///               | "if" "(" <exp> ")" <statement> [ "else" <statement> ]
+/// <declaration> ::= "int" <id> [ = <exp>] ";"
+/// <block-item> ::= <statment> | <declaration>
 /// <exp> ::= <id> "=" <exp> | <logical-or-exp>
 /// <logical-or-exp> ::= <logical-and-exp> { "||" <logical-and-exp> }
 /// <logical-and-exp> ::= <bitwise-or-exp> { "&&" <bitwise-or-exp> }
@@ -33,14 +35,6 @@ trace::init_depth_var!();
 // - Use context from lexing to produce better errors (make a new module for that)s
 // - Add context to the AST so that codegen issues can have better errors
 // - Add some proper tests
-
-// static KEYWORDS: phf::Map<&'static str, Keyword> = phf_map! {
-//     "loop" => Keyword::Loop,
-//     "continue" => Keyword::Continue,
-//     "break" => Keyword::Break,
-//     "fn" => Keyword::Fn,
-//     "extern" => Keyword::Extern,
-// };
 
 pub struct BinOpPrecedence {}
 impl BinOpPrecedence {
@@ -87,7 +81,6 @@ pub struct Parser<I: Iterator<Item = CToken>> {
     it: PutBackN<I>,
 }
 
-// #[trace]
 impl<I> Parser<I>
 where
     I: Iterator<Item = CToken>,
@@ -117,14 +110,13 @@ where
     }
     // Currently returns a program, as the Function type isn't separated as all programs are
     // a single function...
-    /// <function> ::= "int" <id> "(" ")" "{" { <statement> } "}"
     fn parse_function(&mut self, rtype: ReturnType) -> Result<Program> {
         // Get the function name
         let t = self.it.next();
         let fn_name = if let Some(CToken::Identifier(name)) = t {
             name
         } else {
-            bail!("Expected identifier, got {:?}", t);
+            bail!("Expected function name identifier, got {:?}", t);
         };
 
         // Only accept empty parens '()'
@@ -133,60 +125,70 @@ where
         // Next, open brace to start function body
         self.expect_consume_next_token(CToken::OpenBrace)?;
 
-        // Parse statements until the next token is the end of function '}'.
-        let mut statements = Vec::new();
+        // Parse block_items until the next token is the end of function '}'.
+        let mut block_items = Vec::new();
         loop {
             match self.it.next() {
                 Some(CToken::CloseBrace) => break,
                 Some(t) => {
                     self.it.put_back(t);
-                    let s = self.parse_statement()?;
-                    statements.push(s);
+                    let bi = self.parse_block_item()?;
+                    block_items.push(bi);
                 }
                 _ => bail!(
-                    "Ran out of tokens parsing statements in function: {}",
+                    "Ran out of tokens parsing block items in function: {}",
                     fn_name
                 ),
             }
         }
 
-        // If there is no return statement at the end of the function, return zero.
-        match statements.last() {
-            Some(Statement::Return(_)) => { // A return statement already exists at the end
+        // If there is no return statement at the end of the main function, return zero.
+        if fn_name == "main" {
+            match block_items.last() {
+                // A return statement already exists at the end
+                Some(BlockItem::Statement(Statement::Return(_))) => {}
+                // Add return 0
+                _ => block_items.push(BlockItem::Statement(Statement::Return(
+                    Expression::Constant(0),
+                ))),
             }
-            _ => statements.push(Statement::Return(Expression::Constant(0))),
         }
 
-        Ok(Program::Function(fn_name.to_string(), rtype, statements))
+        Ok(Program::Function(fn_name.to_string(), rtype, block_items))
     }
 
-    /// <statement> ::= "return" <exp> ";"
-    ///               | <exp> ";"
-    ///               | "int" <id> [ = <exp>] ";"
-    fn parse_statement(&mut self) -> Result<Statement> {
-        // Can be a return statement, a variable declaration, or an expression.
+    fn parse_block_item(&mut self) -> Result<BlockItem> {
         Ok(match self.it.next() {
-            Some(CToken::Keyword(CKeyWord::Return)) => {
-                // Return expression
-                let exp = self.parse_expression()?;
-                self.expect_consume_next_token(CToken::SemiColon)?;
-                Statement::Return(exp)
-            }
+            // "int" means we've got a declaration
             Some(CToken::Keyword(CKeyWord::Int)) => {
-                // Variable declaration
+                self.it.put_back(CToken::Keyword(CKeyWord::Int));
+                BlockItem::Declaration(self.parse_declaration()?)
+            }
+            // Anything else should be a statment - we'll handle unexpected errors in there
+            Some(t) => {
+                self.it.put_back(t);
+                BlockItem::Statement(self.parse_statement()?)
+            }
+            _ => bail!("Ran out of tokens parsing block item."),
+        })
+    }
+
+    fn parse_declaration(&mut self) -> Result<Declaration> {
+        Ok(match self.it.next() {
+            Some(CToken::Keyword(CKeyWord::Int)) => {
                 match self.it.next() {
                     Some(CToken::Identifier(varname)) => {
                         // There may or may not be an expression following the declaration to set the value.
                         match self.it.next() {
                             // Variable not assigned on declaration
                             Some(CToken::SemiColon) => {
-                                Statement::Declare(varname.to_string(), None)
+                                Declaration::Declare(varname.to_string(), None)
                             }
                             // Variable given a value
                             Some(CToken::Assignment) => {
                                 let exp = self.parse_expression()?;
                                 self.expect_consume_next_token(CToken::SemiColon)?;
-                                Statement::Declare(varname.to_string(), Some(exp))
+                                Declaration::Declare(varname.to_string(), Some(exp))
                             }
                             Some(t) => {
                                 bail!("Unexpected token {:?} when parsing assignment for {} (expecting '=' or ';'", t, varname)
@@ -200,6 +202,19 @@ where
                     Some(t) => bail!("Unexpected token {:?} at start of variable declaration.", t),
                     _ => bail!("Ran out of tokens parsing variable declaration"),
                 }
+            }
+            _ => bail!("Ran out of tokens parsing statement"),
+        })
+    }
+
+    fn parse_statement(&mut self) -> Result<Statement> {
+        // Can be a return statement, a variable declaration, or an expression.
+        Ok(match self.it.next() {
+            Some(CToken::Keyword(CKeyWord::Return)) => {
+                // Return expression
+                let exp = self.parse_expression()?;
+                self.expect_consume_next_token(CToken::SemiColon)?;
+                Statement::Return(exp)
             }
             Some(t) => {
                 // A "normal expression".

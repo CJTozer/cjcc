@@ -1,14 +1,22 @@
 //     | Constant(int)
 /// ```
 /// program = Program(function_declaration)
-/// function_declaration = Function(string, statement list) //string is the function name
+///
+/// function_declaration = Function(string, block_item list) // string is the function name
 ///
 /// statement = Return(exp)
-///           | Declare(string, exp option) //string is variable name
-///                                         //exp is optional initializer
 ///           | Exp(exp)
+///           | If(exp, statement, statement option) // exp is controlling condition
+///                                                  // first statement is if branch
+///                                                  // second (optional) statement is else branch
+///
+/// declaration = Declare(string, exp option) // string is variable name
+///                                           // exp is optional initializer
+///
+/// block_item = Statement(statement) | Declaration(declaration)
+///
 /// exp = Assign(string, exp)
-///     | Var(string) //string is variable name
+///     | Var(string) // string is variable name
 ///     | BinOp(binary_operator, exp, exp)
 ///     | UnOp(unary_operator, exp)
 ///     | Constant(int)
@@ -16,7 +24,13 @@
 
 #[derive(Debug)]
 pub enum Program {
-    Function(String, ReturnType, Vec<Statement>),
+    Function(String, ReturnType, Vec<BlockItem>),
+}
+
+#[derive(Debug)]
+pub enum BlockItem {
+    Statement(Statement),
+    Declaration(Declaration),
 }
 
 #[derive(Debug)]
@@ -25,10 +39,15 @@ pub enum ReturnType {
 }
 
 #[derive(Debug)]
+pub enum Declaration {
+    Declare(String, Option<Expression>),
+}
+
+#[derive(Debug)]
 pub enum Statement {
     Return(Expression),
-    Declare(String, Option<Expression>),
     Exp(Expression),
+    If(Expression, Box<Statement>, Option<Expression>),
 }
 
 #[derive(Debug)]

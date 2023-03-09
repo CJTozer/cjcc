@@ -1,4 +1,7 @@
-use crate::ast::{BinaryOperator, Expression, Program, ReturnType, Statement, UnaryOperator};
+use crate::ast::{
+    BinaryOperator, BlockItem, Declaration, Expression, Program, ReturnType, Statement,
+    UnaryOperator,
+};
 use std::collections::HashMap;
 
 // TODO
@@ -59,7 +62,7 @@ impl Codegen {
         }
     }
 
-    fn codegen_function(&mut self, name: &str, _rtype: &ReturnType, ss: &Vec<Statement>) {
+    fn codegen_function(&mut self, name: &str, _rtype: &ReturnType, bis: &Vec<BlockItem>) {
         self.code.push_str(&format!("    .globl {}\n", name));
         self.code.push_str(&format!("{}:\n", name));
 
@@ -69,8 +72,8 @@ impl Codegen {
         self.code.push_str("    push %rbp\n");
         self.code.push_str("    mov %rsp, %rbp\n");
 
-        for s in ss {
-            self.codegen_statement(s)
+        for bi in bis {
+            self.codegen_block_item(bi)
         }
 
         // Function epilogue
@@ -81,11 +84,24 @@ impl Codegen {
         self.code.push_str("    ret\n");
     }
 
+    fn codegen_block_item(&mut self, exp: &BlockItem) {
+        match exp {
+            BlockItem::Declaration(d) => self.codegen_declaration(d),
+            BlockItem::Statement(s) => self.codegen_statement(s),
+        }
+    }
+
     fn codegen_statement(&mut self, exp: &Statement) {
         match exp {
             Statement::Return(exp) => self.codegen_expression(&exp),
-            Statement::Declare(var, val) => self.codegen_declare(var, val),
             Statement::Exp(exp) => self.codegen_expression(exp),
+            Statement::If(_, _, _) => todo!(),
+        }
+    }
+
+    fn codegen_declaration(&mut self, exp: &Declaration) {
+        match exp {
+            Declaration::Declare(var, val) => self.codegen_declare(var, val),
         }
     }
 

@@ -13,11 +13,13 @@ pub enum CToken {
     Keyword(CKeyWord),  // A keyword like 'int' or 'return'.
     Identifier(String), // Variable, function, parameter name etc.
     // Syntax
-    OpenParen,  // (
-    CloseParen, // )
-    OpenBrace,  // {
-    CloseBrace, // }
-    SemiColon,  // ;
+    OpenParen,    // (
+    CloseParen,   // )
+    OpenBrace,    // {
+    CloseBrace,   // }
+    SemiColon,    // ;
+    Colon,        // :
+    QuestionMark, // ?
     // Constants
     Integer(i32), // A number
     // Unary Operators
@@ -52,6 +54,8 @@ pub enum CToken {
 pub enum CKeyWord {
     Int,
     Return,
+    If,
+    Else,
 }
 
 impl fmt::Display for CKeyWord {
@@ -59,6 +63,8 @@ impl fmt::Display for CKeyWord {
         match self {
             CKeyWord::Int => write!(f, "int"),
             CKeyWord::Return => write!(f, "return"),
+            CKeyWord::If => write!(f, "if"),
+            CKeyWord::Else => write!(f, "else"),
         }
     }
 }
