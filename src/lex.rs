@@ -7,7 +7,7 @@ use std::fmt;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub enum CToken {
     // Keywords and identifiers
     Keyword(CKeyWord),  // A keyword like 'int' or 'return'.
@@ -27,11 +27,17 @@ pub enum CToken {
     // Binary Operators
     Multiplication,          // *
     Division,                // /
+    Modulo,                  // %
     Addition,                // +
     LogicalAnd,              // &&
     LogicalOr,               // ||
     LogicalEqual,            // ==
     LogicalNotEqual,         // !=
+    BitwiseAnd,              // &
+    BitwiseXor,              // ^
+    BitwiseOr,               // |
+    ShiftLeft,               // <<
+    ShiftRight,              // >>
     ComparisonLessThan,      // <
     ComparisonGreaterThan,   // >
     ComparisonLessThanEq,    // <=
@@ -42,7 +48,7 @@ pub enum CToken {
     Whitespace,
 }
 
-#[derive(EnumIter, Debug, PartialEq, Clone)]
+#[derive(EnumIter, Debug, PartialEq, Clone, Hash, Eq)]
 pub enum CKeyWord {
     Int,
     Return,
@@ -104,9 +110,11 @@ fn next_token(data: &str) -> Result<(CToken, usize)> {
             '!' => parse_pling_token(data),
             '*' => Ok((CToken::Multiplication, 1)),
             '/' => Ok((CToken::Division, 1)),
+            '%' => Ok((CToken::Modulo, 1)),
             '+' => Ok((CToken::Addition, 1)),
             '&' => parse_ampersand_token(data),
             '|' => parse_bar_token(data),
+            '^' => Ok((CToken::BitwiseXor, 1)),
             '=' => parse_equals_token(data),
             '>' => parse_gt_token(data),
             '<' => parse_lt_token(data),
@@ -134,7 +142,7 @@ fn parse_ampersand_token(data: &str) -> Result<(CToken, usize)> {
     // Already know first char is '&'
     match data.chars().nth(1) {
         Some('&') => Ok((CToken::LogicalAnd, 2)),
-        Some(t) => bail!("Unexpected token &{}", t),
+        Some(_) => Ok((CToken::BitwiseAnd, 1)),
         _ => bail!("Unexpected EOF after &"),
     }
 }
@@ -143,7 +151,7 @@ fn parse_bar_token(data: &str) -> Result<(CToken, usize)> {
     // Already know first char is '|'
     match data.chars().nth(1) {
         Some('|') => Ok((CToken::LogicalOr, 2)),
-        Some(t) => bail!("Unexpected token |{}", t),
+        Some(_) => Ok((CToken::BitwiseOr, 1)),
         _ => bail!("Unexpected EOF after |"),
     }
 }
@@ -161,6 +169,7 @@ fn parse_gt_token(data: &str) -> Result<(CToken, usize)> {
     // Already know first char is '>'
     match data.chars().nth(1) {
         Some('=') => Ok((CToken::ComparisonGreaterThanEq, 2)),
+        Some('>') => Ok((CToken::ShiftRight, 2)),
         _ => Ok((CToken::ComparisonGreaterThan, 1)),
     }
 }
@@ -169,6 +178,7 @@ fn parse_lt_token(data: &str) -> Result<(CToken, usize)> {
     // Already know first char is '>'
     match data.chars().nth(1) {
         Some('=') => Ok((CToken::ComparisonLessThanEq, 2)),
+        Some('<') => Ok((CToken::ShiftLeft, 2)),
         _ => Ok((CToken::ComparisonLessThan, 1)),
     }
 }

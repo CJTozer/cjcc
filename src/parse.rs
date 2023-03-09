@@ -2,6 +2,7 @@ use crate::ast::{BinaryOperator, Expression, Program, ReturnType, Statement, Una
 use crate::lex::{CKeyWord, CToken};
 use anyhow::{bail, Result};
 use itertools::{put_back_n, PutBackN};
+use std::collections::HashMap;
 use trace::trace;
 
 trace::init_depth_var!();
@@ -15,11 +16,15 @@ trace::init_depth_var!();
 ///               | "int" <id> [ = <exp>] ";"
 /// <exp> ::= <id> "=" <exp> | <logical-or-exp>
 /// <logical-or-exp> ::= <logical-and-exp> { "||" <logical-and-exp> }
-/// <logical-and-exp> ::= <equality-exp> { "&&" <equality-exp> }
+/// <logical-and-exp> ::= <bitwise-or-exp> { "&&" <bitwise-or-exp> }
+/// <bitwise-or-exp> ::= <bitwise-xor-exp> { "|" <bitwise-xor-exp> }
+/// <bitwise-xor-exp> ::= <bitwise-and-exp> { "|" <bitwise-and-exp> }
+/// <bitwise-and-exp> ::= <equality-exp> { "|" <equality-exp> }
 /// <equality-exp> ::= <relational-exp> { ("!=" | "==") <relational-exp> }
-/// <relational-exp> ::= <additive-exp> { ("<" | ">" | "<=" | ">=") <additive-exp> }
+/// <relational-exp> ::= <shift-exp> { ("<" | ">" | "<=" | ">=") <shift-exp> }
+/// <shift-exp> ::= <additive-exp> { ("<<" | ">>") <additive-exp> }
 /// <additive-exp> ::= <term> { ("+" | "-") <term> }
-/// <term> ::= <factor> { ("*" | "/") <factor> }
+/// <term> ::= <factor> { ("*" | "/" | "%") <factor> }
 /// <factor> ::= "(" <exp> ")" | <unary_op> <factor> | <int> | <id>
 /// <unary_op> ::= "!" | "~" | "-"
 /// ```
@@ -178,26 +183,39 @@ where
         })
     }
 
-    /// <logical-or-exp> ::= <logical-and-exp> { "||" <logical-and-exp> }
-    fn parse_logical_or_expression(&mut self) -> Result<Expression> {
-        // Always expects a Logical And Expression first - so parse that
-        let first_exp = self.parse_logical_and_expression()?;
+    /// Helper function to do the binary operator precedence in a neat way
+    /// Passing in the mapping of CToken to BinaryOperator for the BinOp expression, as well as the function to parse the "next layer"
+    fn collect_matching_binary_operators<F>(
+        &mut self,
+        mut func: F,
+        map: HashMap<CToken, BinaryOperator>,
+    ) -> Result<Expression>
+    where
+        F: FnMut(&mut Self) -> Result<Expression>,
+    {
+        // Parse the first expression
+        let first_exp = func(self)?;
 
-        // Collect terms while they have the same precedence
-        self.collect_while_logical_or(first_exp)
+        // Call inner function to grap any subsequent matches of the same precedence
+        self.collect_matching_binary_operators_inner(func, map, first_exp)
     }
 
-    fn collect_while_logical_or(&mut self, first_exp: Expression) -> Result<Expression> {
-        // Collect terms up until we don't get a '||' operator.
+    fn collect_matching_binary_operators_inner<F>(
+        &mut self,
+        mut func: F,
+        map: HashMap<CToken, BinaryOperator>,
+        first_exp: Expression,
+    ) -> Result<Expression>
+    where
+        F: FnMut(&mut Self) -> Result<Expression>,
+    {
         Ok(match self.it.next() {
-            Some(CToken::LogicalOr) => {
-                let second_exp = self.parse_logical_and_expression()?;
-                let new_first_exp = Expression::BinOp(
-                    BinaryOperator::LogicalOr,
-                    Box::new(first_exp),
-                    Box::new(second_exp),
-                );
-                self.collect_while_logical_or(new_first_exp)?
+            Some(t) if map.contains_key(&t) => {
+                let binop = map.get(&t).unwrap();
+                let second_exp = func(self)?;
+                let new_first_exp =
+                    Expression::BinOp(*binop, Box::new(first_exp), Box::new(second_exp));
+                self.collect_matching_binary_operators_inner(func, map, new_first_exp)?
             }
             Some(t) => {
                 // Put back the last token
@@ -209,213 +227,87 @@ where
         })
     }
 
-    /// <logical-and-exp> ::= <equality-exp> { "&&" <equality-exp> }
-    fn parse_logical_and_expression(&mut self) -> Result<Expression> {
-        // Always expects an Equality Expression first - so parse that
-        let first_exp = self.parse_equality_expression()?;
-
-        // Collect terms while they have the same precedence
-        self.collect_while_logical_and(first_exp)
+    /// <logical-or-exp> ::= <logical-and-exp> { "||" <logical-and-exp> }
+    fn parse_logical_or_expression(&mut self) -> Result<Expression> {
+        // TODO - declare these maps all statically.
+        let mut map = HashMap::new();
+        map.insert(CToken::LogicalOr, BinaryOperator::LogicalOr);
+        self.collect_matching_binary_operators(Self::parse_logical_and_expression, map)
     }
 
-    fn collect_while_logical_and(&mut self, first_exp: Expression) -> Result<Expression> {
-        // Collect terms up until we don't get a '&&' operator.
-        Ok(match self.it.next() {
-            Some(CToken::LogicalAnd) => {
-                let second_exp = self.parse_equality_expression()?;
-                let new_first_exp = Expression::BinOp(
-                    BinaryOperator::LogicalAnd,
-                    Box::new(first_exp),
-                    Box::new(second_exp),
-                );
-                self.collect_while_logical_and(new_first_exp)?
-            }
-            Some(t) => {
-                // Put back the last token
-                // Reached the end of the same precedence operators.
-                self.it.put_back(t);
-                first_exp
-            }
-            _ => bail!("Ran out of tokens parsing logical and expression"),
-        })
+    /// <logical-and-exp> ::= <bitwise-or-exp> { "&&" <bitwise-or-exp> }
+    fn parse_logical_and_expression(&mut self) -> Result<Expression> {
+        let mut map = HashMap::new();
+        map.insert(CToken::LogicalAnd, BinaryOperator::LogicalAnd);
+        self.collect_matching_binary_operators(Self::parse_bitwise_or_expression, map)
+    }
+    /// <bitwise-or-exp> ::= <bitwise-xor-exp> { "|" <bitwise-xor-exp> }
+    fn parse_bitwise_or_expression(&mut self) -> Result<Expression> {
+        let mut map = HashMap::new();
+        map.insert(CToken::BitwiseOr, BinaryOperator::BitwiseOr);
+        self.collect_matching_binary_operators(Self::parse_bitwise_xor_expression, map)
+    }
+
+    /// <bitwise-xor-exp> ::= <bitwise-and-exp> { "|" <bitwise-and-exp> }
+    fn parse_bitwise_xor_expression(&mut self) -> Result<Expression> {
+        let mut map = HashMap::new();
+        map.insert(CToken::BitwiseXor, BinaryOperator::BitwiseXor);
+        self.collect_matching_binary_operators(Self::parse_bitwise_and_expression, map)
+    }
+
+    /// <bitwise-and-exp> ::= <equality-exp> { "|" <equality-exp> }
+    fn parse_bitwise_and_expression(&mut self) -> Result<Expression> {
+        let mut map = HashMap::new();
+        map.insert(CToken::BitwiseAnd, BinaryOperator::BitwiseAnd);
+        self.collect_matching_binary_operators(Self::parse_equality_expression, map)
     }
 
     /// <equality-exp> ::= <relational-exp> { ("!=" | "==") <relational-exp> }
     fn parse_equality_expression(&mut self) -> Result<Expression> {
-        // Always expects a Relational Expression first - so parse that
-        let first_exp = self.parse_relational_expression()?;
-
-        // Collect terms while they have the same precedence
-        self.collect_while_equality(first_exp)
+        let mut map = HashMap::new();
+        map.insert(CToken::LogicalEqual, BinaryOperator::Equality);
+        map.insert(CToken::LogicalNotEqual, BinaryOperator::NotEquality);
+        self.collect_matching_binary_operators(Self::parse_relational_expression, map)
     }
 
-    fn collect_while_equality(&mut self, first_exp: Expression) -> Result<Expression> {
-        // Collect terms up until we don't get a '==' operator.
-        Ok(match self.it.next() {
-            Some(CToken::LogicalEqual) => {
-                let second_exp = self.parse_relational_expression()?;
-                let new_first_exp = Expression::BinOp(
-                    BinaryOperator::Equality,
-                    Box::new(first_exp),
-                    Box::new(second_exp),
-                );
-                self.collect_while_equality(new_first_exp)?
-            }
-            Some(CToken::LogicalNotEqual) => {
-                let second_exp = self.parse_relational_expression()?;
-                let new_first_exp = Expression::BinOp(
-                    BinaryOperator::NotEquality,
-                    Box::new(first_exp),
-                    Box::new(second_exp),
-                );
-                self.collect_while_equality(new_first_exp)?
-            }
-            Some(t) => {
-                // Put back the last token
-                // Reached the end of the same precedence operators.
-                self.it.put_back(t);
-                first_exp
-            }
-            _ => bail!("Ran out of tokens parsing logical equality expression"),
-        })
-    }
-
-    /// <relational-exp> ::= <additive-exp> { ("<" | ">" | "<=" | ">=") <additive-exp> }
+    /// <relational-exp> ::= <shift-exp> { ("<" | ">" | "<=" | ">=") <shift-exp> }
     fn parse_relational_expression(&mut self) -> Result<Expression> {
-        // Always expects an Additive Expression first - so parse that
-        let first_exp = self.parse_additive_expression()?;
-
-        // Collect terms while they have the same precedence
-        self.collect_while_relational(first_exp)
+        let mut map = HashMap::new();
+        map.insert(CToken::ComparisonGreaterThan, BinaryOperator::GreaterThan);
+        map.insert(
+            CToken::ComparisonGreaterThanEq,
+            BinaryOperator::GreaterThanEq,
+        );
+        map.insert(CToken::ComparisonLessThan, BinaryOperator::LessThan);
+        map.insert(CToken::ComparisonLessThanEq, BinaryOperator::LessThanEq);
+        self.collect_matching_binary_operators(Self::parse_shift_expression, map)
     }
 
-    fn collect_while_relational(&mut self, first_exp: Expression) -> Result<Expression> {
-        // Collect terms up until we don't get a relational operator.
-        Ok(match self.it.next() {
-            Some(CToken::ComparisonGreaterThan) => {
-                let second_exp = self.parse_additive_expression()?;
-                let new_first_exp = Expression::BinOp(
-                    BinaryOperator::GreaterThan,
-                    Box::new(first_exp),
-                    Box::new(second_exp),
-                );
-                self.collect_while_equality(new_first_exp)?
-            }
-            Some(CToken::ComparisonGreaterThanEq) => {
-                let second_exp = self.parse_additive_expression()?;
-                let new_first_exp = Expression::BinOp(
-                    BinaryOperator::GreaterThanEq,
-                    Box::new(first_exp),
-                    Box::new(second_exp),
-                );
-                self.collect_while_equality(new_first_exp)?
-            }
-            Some(CToken::ComparisonLessThan) => {
-                let second_exp = self.parse_additive_expression()?;
-                let new_first_exp = Expression::BinOp(
-                    BinaryOperator::LessThan,
-                    Box::new(first_exp),
-                    Box::new(second_exp),
-                );
-                self.collect_while_equality(new_first_exp)?
-            }
-            Some(CToken::ComparisonLessThanEq) => {
-                let second_exp = self.parse_additive_expression()?;
-                let new_first_exp = Expression::BinOp(
-                    BinaryOperator::LessThanEq,
-                    Box::new(first_exp),
-                    Box::new(second_exp),
-                );
-                self.collect_while_equality(new_first_exp)?
-            }
-            Some(t) => {
-                // Put back the last token
-                // Reached the end of the same precedence operators.
-                self.it.put_back(t);
-                first_exp
-            }
-            _ => bail!("Ran out of tokens parsing logical equality expression"),
-        })
+    /// <shift-exp> ::= <additive-exp> { ("<<" | ">>") <additive-exp> }
+    fn parse_shift_expression(&mut self) -> Result<Expression> {
+        let mut map = HashMap::new();
+        map.insert(CToken::ShiftLeft, BinaryOperator::ShiftLeft);
+        map.insert(CToken::ShiftRight, BinaryOperator::ShiftRight);
+        self.collect_matching_binary_operators(Self::parse_additive_expression, map)
     }
 
     /// <additive-exp> ::= <term> { ("+" | "-") <term> }
     fn parse_additive_expression(&mut self) -> Result<Expression> {
-        // Always expects a Term first - so parse that
-        let first_term = self.parse_term()?;
+        let mut map = HashMap::new();
+        map.insert(CToken::Addition, BinaryOperator::Addition);
+        map.insert(CToken::Minus, BinaryOperator::Difference);
 
-        // Collect terms while they have the same precedence
-        self.collect_while_add_sub(first_term)
+        self.collect_matching_binary_operators(Self::parse_term, map)
     }
 
-    fn collect_while_add_sub(&mut self, first_term: Expression) -> Result<Expression> {
-        // Collect terms up until we don't get a '+' or '-' operator.
-        Ok(match self.it.next() {
-            Some(CToken::Addition) => {
-                let second_term = self.parse_term()?;
-                let new_first_term = Expression::BinOp(
-                    BinaryOperator::Addition,
-                    Box::new(first_term),
-                    Box::new(second_term),
-                );
-                self.collect_while_add_sub(new_first_term)?
-            }
-            Some(CToken::Minus) => {
-                let second_term = self.parse_term()?;
-                let new_first_term = Expression::BinOp(
-                    BinaryOperator::Difference,
-                    Box::new(first_term),
-                    Box::new(second_term),
-                );
-                self.collect_while_add_sub(new_first_term)?
-            }
-            Some(t) => {
-                // Put back the last token
-                // Reached the end of the same precedence operators.
-                self.it.put_back(t);
-                first_term
-            }
-            _ => bail!("Ran out of tokens parsing expression"),
-        })
-    }
-
-    /// <term> ::= <factor> { ("*" | "/") <factor> }
+    /// <term> ::= <factor> { ("*" | "/" | "%") <factor> }
     fn parse_term(&mut self) -> Result<Expression> {
-        // Always expects a Factor first - so parse that
-        let first_factor = self.parse_factor()?;
+        let mut map = HashMap::new();
+        map.insert(CToken::Multiplication, BinaryOperator::Multiplication);
+        map.insert(CToken::Division, BinaryOperator::Division);
+        map.insert(CToken::Modulo, BinaryOperator::Modulo);
 
-        // Collect terms while they have the same precedence
-        self.collect_while_mul_div(first_factor)
-    }
-
-    fn collect_while_mul_div(&mut self, first_factor: Expression) -> Result<Expression> {
-        // Then if '*' or '/', grab that and parse the RHS Factor
-        // Otherwise back up the stack to the Expression
-        Ok(match self.it.next() {
-            Some(CToken::Multiplication) => {
-                let second_factor = self.parse_factor()?;
-                let new_first_factor = Expression::BinOp(
-                    BinaryOperator::Multiplication,
-                    Box::new(first_factor),
-                    Box::new(second_factor),
-                );
-                self.collect_while_mul_div(new_first_factor)?
-            }
-            Some(CToken::Division) => {
-                let second_factor = self.parse_factor()?;
-                let new_first_factor = Expression::BinOp(
-                    BinaryOperator::Division,
-                    Box::new(first_factor),
-                    Box::new(second_factor),
-                );
-                self.collect_while_mul_div(new_first_factor)?
-            }
-            Some(t) => {
-                // Put back the last token
-                self.it.put_back(t);
-                first_factor
-            }
-            _ => bail!("Ran out of tokens parsing factor"),
-        })
+        self.collect_matching_binary_operators(Self::parse_factor, map)
     }
 
     /// <factor> ::= "(" <exp> ")" | <unary_op> <factor> | <int> | <id>

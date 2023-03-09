@@ -47,12 +47,18 @@ pub enum UnaryOperator {
     LogicalNegation,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum BinaryOperator {
     Addition,
     Difference,
     Multiplication,
     Division,
+    Modulo,
+    BitwiseAnd,
+    BitwiseXor,
+    BitwiseOr,
+    ShiftLeft,
+    ShiftRight,
     LogicalOr,
     LogicalAnd,
     Equality,
