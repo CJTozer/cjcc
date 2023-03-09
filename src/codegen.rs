@@ -192,9 +192,30 @@ impl Codegen {
                 self.code.push_str("    pop %ecx\n");
                 self.code.push_str("    idiv %ecx, %eax\n");
             }
-            BinaryOperator::BitwiseAnd => todo!(),
-            BinaryOperator::BitwiseXor => todo!(),
-            BinaryOperator::BitwiseOr => todo!(),
+            BinaryOperator::BitwiseAnd => {
+                // exp_a & exp_b
+                self.codegen_expression(exp_a);
+                self.code.push_str("    push %eax\n");
+                self.codegen_expression(exp_b);
+                self.code.push_str("    pop %ecx\n");
+                self.code.push_str("    and %ecx, %eax\n");
+            }
+            BinaryOperator::BitwiseOr => {
+                // exp_a | exp_b
+                self.codegen_expression(exp_a);
+                self.code.push_str("    push %eax\n");
+                self.codegen_expression(exp_b);
+                self.code.push_str("    pop %ecx\n");
+                self.code.push_str("    or %ecx, %eax\n");
+            }
+            BinaryOperator::BitwiseXor => {
+                // exp_a ^ exp_b
+                self.codegen_expression(exp_a);
+                self.code.push_str("    push %eax\n");
+                self.codegen_expression(exp_b);
+                self.code.push_str("    pop %ecx\n");
+                self.code.push_str("    xor %ecx, %eax\n");
+            }
             BinaryOperator::Modulo => {
                 // exp_a % exp_b
                 // Same as division but the remainder is in %edx
