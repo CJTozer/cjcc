@@ -222,13 +222,13 @@ where
             (Some(a), Some(b)) => {
                 self.it.put_back(b);
                 self.it.put_back(a);
-                self.parse_binary_operators_by_precedence(
+                self.parse_binary_ops_by_precedence(
                     BinOpPrecedence::get_binop_precedence().as_slice(),
                 )?
             }
             (Some(a), None) => {
                 self.it.put_back(a);
-                self.parse_binary_operators_by_precedence(
+                self.parse_binary_ops_by_precedence(
                     BinOpPrecedence::get_binop_precedence().as_slice(),
                 )?
             }
@@ -238,7 +238,7 @@ where
 
     /// Helper function to do the binary operator precedence in a neat way
     /// Passing in the mapping of CToken to BinaryOperator for the BinOp expression, as well as the function to parse the "next layer"
-    fn collect_matching_binary_operators<F>(
+    fn collect_matching_binary_ops<F>(
         &mut self,
         binop_prec: &[HashMap<CToken, BinaryOperator>],
         mut func: F,
@@ -251,10 +251,10 @@ where
         let first_exp = func(self, binop_prec)?;
 
         // Call inner function to grap any subsequent matches of the same precedence
-        self.collect_matching_binary_operators_inner(binop_prec, func, map, first_exp)
+        self.collect_matching_binary_ops_inner(binop_prec, func, map, first_exp)
     }
 
-    fn collect_matching_binary_operators_inner<F>(
+    fn collect_matching_binary_ops_inner<F>(
         &mut self,
         binop_prec: &[HashMap<CToken, BinaryOperator>],
         mut func: F,
@@ -270,7 +270,7 @@ where
                 let second_exp = func(self, binop_prec)?;
                 let new_first_exp =
                     Expression::BinOp(*binop, Box::new(first_exp), Box::new(second_exp));
-                self.collect_matching_binary_operators_inner(binop_prec, func, map, new_first_exp)?
+                self.collect_matching_binary_ops_inner(binop_prec, func, map, new_first_exp)?
             }
             Some(t) => {
                 // Put back the last token
@@ -282,43 +282,37 @@ where
         })
     }
 
-    /// <logical-or-exp> ::= <logical-and-exp> { "||" <logical-and-exp> }
-    fn parse_binary_operators_by_precedence(
+    fn parse_binary_ops_by_precedence(
         &mut self,
         binop_prec: &[HashMap<CToken, BinaryOperator>],
     ) -> Result<Expression> {
-        // If binop_prec is empty - parse_factor - we're done with binary operators
-        // Otherwise call collect_matching_binary_operators, using
-        // - the next map from the current binop_prec slice
-        // - the current function
-        // - the remaining slice
         match binop_prec.first() {
-            Some(cur) => self.collect_matching_binary_operators(
+            // There are more binary operations to work through - pass in the remaining precedence and collect this level
+            Some(cur) => self.collect_matching_binary_ops(
                 &binop_prec[1..],
-                Self::parse_binary_operators_by_precedence,
+                Self::parse_binary_ops_by_precedence,
                 cur,
             ),
-            _ => self.parse_factor(),
+            // Out of binary operators, drop down to parsing unary operators
+            None => self.parse_unary_ops(),
         }
     }
 
-    /// <factor> ::= "(" <exp> ")" | <unary_op> <factor> | <int> | <id>
-    /// <unary_op> ::= "!" | "~" | "-"
-    fn parse_factor(&mut self) -> Result<Expression> {
+    fn parse_unary_ops(&mut self) -> Result<Expression> {
         // Currently only expect an integer constant.
         let t = self.it.next();
         Ok(match t {
             Some(CToken::Integer(val)) => Expression::Constant(val),
             Some(CToken::Minus) => {
-                let inner = self.parse_factor()?;
+                let inner = self.parse_unary_ops()?;
                 Expression::UnOp(UnaryOperator::Negation, Box::new(inner))
             }
             Some(CToken::BitwiseComplement) => {
-                let inner = self.parse_factor()?;
+                let inner = self.parse_unary_ops()?;
                 Expression::UnOp(UnaryOperator::BitwiseComplement, Box::new(inner))
             }
             Some(CToken::LogicalNegation) => {
-                let inner = self.parse_factor()?;
+                let inner = self.parse_unary_ops()?;
                 Expression::UnOp(UnaryOperator::LogicalNegation, Box::new(inner))
             }
             Some(CToken::OpenParen) => {
