@@ -14,6 +14,7 @@ use std::collections::HashMap;
 /// <block-item> ::= <statment> | <declaration>
 /// <statement> ::= "return" <exp> ";"
 ///               | "if" "(" <exp> ")" <statement> [ "else" <statement> ]
+///               | "{" { <block-item> } "}"
 ///               | <exp> ";"
 /// <declaration> ::= "int" <id> [ = <exp>] ";"
 /// <exp> ::= <id> "=" <exp> | <conditional-exp>
@@ -127,21 +128,7 @@ where
         self.expect_consume_next_token(CToken::OpenBrace)?;
 
         // Parse block_items until the next token is the end of function '}'.
-        let mut block_items = Vec::new();
-        loop {
-            match self.it.next() {
-                Some(CToken::CloseBrace) => break,
-                Some(t) => {
-                    self.it.put_back(t);
-                    let bi = self.parse_block_item()?;
-                    block_items.push(bi);
-                }
-                _ => bail!(
-                    "Ran out of tokens parsing block items in function: {}",
-                    fn_name
-                ),
-            }
-        }
+        let mut block_items = self.parse_block_item_list()?;
 
         // If there is no return statement at the end of the main function, return zero.
         if fn_name == "main" {
@@ -156,6 +143,30 @@ where
         }
 
         Ok(Program::Function(fn_name.to_string(), rtype, block_items))
+    }
+
+    fn parse_block_item_list(&mut self) -> Result<Vec<BlockItem>> {
+        let mut bi_list = Vec::new();
+        loop {
+            match self.parse_next_block_item()? {
+                Some(bi) => {
+                    bi_list.push(bi);
+                }
+                None => break,
+            }
+        }
+        Ok(bi_list)
+    }
+
+    fn parse_next_block_item(&mut self) -> Result<Option<BlockItem>> {
+        Ok(match self.it.next() {
+            Some(CToken::CloseBrace) => None,
+            Some(t) => {
+                self.it.put_back(t);
+                Some(self.parse_block_item()?)
+            }
+            None => bail!("Ran out of tokens parsing block items"),
+        })
     }
 
     fn parse_block_item(&mut self) -> Result<BlockItem> {

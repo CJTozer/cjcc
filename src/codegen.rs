@@ -105,6 +105,7 @@ impl Codegen {
             Statement::If(cond, if_branch, else_branch) => {
                 self.codegen_if_test(cond, if_branch, else_branch)
             }
+            Statement::Compound(_) => todo!(),
         }
     }
 

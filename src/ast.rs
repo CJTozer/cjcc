@@ -9,6 +9,7 @@
 ///           | If(exp, statement, statement option) // exp is controlling condition
 ///                                                  // first statement is if branch
 ///                                                  // second (optional) statement is else branch
+///           | Compound(block_item list)
 ///
 /// declaration = Declare(string, exp option) // string is variable name
 ///                                           // exp is optional initializer
@@ -48,6 +49,7 @@ pub enum Statement {
     Return(Expression),
     Exp(Expression),
     If(Expression, Box<Statement>, Option<Box<Statement>>),
+    Compound(Vec<BlockItem>),
 }
 
 #[derive(Debug)]
