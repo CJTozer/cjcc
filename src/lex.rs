@@ -111,6 +111,8 @@ fn next_token(data: &str) -> Result<(CToken, usize)> {
             '(' => Ok((CToken::OpenParen, 1)),
             ')' => Ok((CToken::CloseParen, 1)),
             ';' => Ok((CToken::SemiColon, 1)),
+            '?' => Ok((CToken::QuestionMark, 1)),
+            ':' => Ok((CToken::Colon, 1)),
             '~' => Ok((CToken::BitwiseComplement, 1)),
             '-' => Ok((CToken::Minus, 1)),
             '!' => parse_pling_token(data),

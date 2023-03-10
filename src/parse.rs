@@ -16,7 +16,8 @@ use std::collections::HashMap;
 ///               | "if" "(" <exp> ")" <statement> [ "else" <statement> ]
 ///               | <exp> ";"
 /// <declaration> ::= "int" <id> [ = <exp>] ";"
-/// <exp> ::= <id> "=" <exp> | <logical-or-exp>
+/// <exp> ::= <id> "=" <exp> | <conditional-exp>
+/// <conditional-exp> ::= <logical-or-exp> [ "?" <exp> ":" <conditional-exp> ]
 /// <logical-or-exp> ::= <logical-and-exp> { "||" <logical-and-exp> }
 /// <logical-and-exp> ::= <bitwise-or-exp> { "&&" <bitwise-or-exp> }
 /// <bitwise-or-exp> ::= <bitwise-xor-exp> { "^" <bitwise-xor-exp> }
@@ -268,17 +269,39 @@ where
             (Some(a), Some(b)) => {
                 self.it.put_back(b);
                 self.it.put_back(a);
-                self.parse_binary_ops_by_precedence(
-                    BinOpPrecedence::get_binop_precedence().as_slice(),
-                )?
+                self.parse_conditional()?
             }
             (Some(a), None) => {
                 self.it.put_back(a);
-                self.parse_binary_ops_by_precedence(
-                    BinOpPrecedence::get_binop_precedence().as_slice(),
-                )?
+                self.parse_conditional()?
             }
             _ => bail!("Ran out of tokens parsing expression"),
+        })
+    }
+
+    fn parse_conditional(&mut self) -> Result<Expression> {
+        // Grab the first expression
+        let first_exp = self
+            .parse_binary_ops_by_precedence(BinOpPrecedence::get_binop_precedence().as_slice())?;
+
+        // If we now have a '?' this is a conditional expression
+        Ok(match self.it.next() {
+            Some(CToken::QuestionMark) => {
+                let if_branch = self.parse_expression()?;
+                self.expect_consume_next_token(CToken::Colon)?;
+                let else_branch = self.parse_conditional()?;
+                Expression::Conditional(
+                    Box::new(first_exp),
+                    Box::new(if_branch),
+                    Box::new(else_branch),
+                )
+            }
+            // Otherwise it's a normal expression
+            Some(t) => {
+                self.it.put_back(t);
+                first_exp
+            }
+            _ => bail!("Ran out of tokens parsing conditional"),
         })
     }
 

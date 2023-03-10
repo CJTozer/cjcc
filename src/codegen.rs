@@ -121,7 +121,40 @@ impl Codegen {
             Expression::BinOp(binop, exp_a, exp_b) => self.codegen_binop(binop, exp_a, exp_b),
             Expression::UnOp(unop, exp) => self.codegen_unop(unop, exp),
             Expression::Constant(c) => self.codegen_constant(*c),
+            Expression::Conditional(cond, if_branch, else_branch) => {
+                self.codegen_ternary(cond, if_branch, else_branch)
+            }
         }
+    }
+
+    // TODO How can I combine with if test?
+    fn codegen_ternary(
+        &mut self,
+        cond: &Expression,
+        if_statement: &Box<Expression>,
+        else_statement: &Box<Expression>,
+    ) {
+        let this_id = self.next_id();
+        let else_label = format!("_else{}", this_id);
+        let end_label = format!("_ifend{}", this_id);
+
+        // Evaluate the conditional expression
+        self.codegen_expression(cond);
+
+        // Compare that value with zero, and if they match (it's false) jump to else
+        self.code.push_str("    cmp $0, %rax\n");
+        self.code.push_str(&format!("    je {}\n", else_label));
+
+        // Evaluate the if statement, then jump to the end of the conditional
+        self.codegen_expression(&*if_statement);
+        self.code.push_str(&format!("    jmp {}\n", end_label));
+
+        // If we have an else expression, throw that in here at the else label
+        self.code.push_str(&format!("{}:\n", else_label));
+        self.codegen_expression(&*else_statement);
+
+        // End label for conditional
+        self.code.push_str(&format!("{}:\n", end_label));
     }
 
     fn codegen_if_test(

@@ -57,6 +57,7 @@ pub enum Expression {
     BinOp(BinaryOperator, Box<Expression>, Box<Expression>),
     UnOp(UnaryOperator, Box<Expression>),
     Constant(i32),
+    Conditional(Box<Expression>, Box<Expression>, Box<Expression>),
 }
 
 #[derive(Debug)]
