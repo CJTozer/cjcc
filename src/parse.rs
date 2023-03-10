@@ -11,11 +11,11 @@ use std::collections::HashMap;
 /// ```
 /// <program> ::= <function>
 /// <function> ::= "int" <id> "(" ")" "{" { <block-item> } "}"
-/// <statement> ::= "return" <exp> ";"
-///               | <exp> ";"
-///               | "if" "(" <exp> ")" <statement> [ "else" <statement> ]
-/// <declaration> ::= "int" <id> [ = <exp>] ";"
 /// <block-item> ::= <statment> | <declaration>
+/// <statement> ::= "return" <exp> ";"
+///               | "if" "(" <exp> ")" <statement> [ "else" <statement> ]
+///               | <exp> ";"
+/// <declaration> ::= "int" <id> [ = <exp>] ";"
 /// <exp> ::= <id> "=" <exp> | <logical-or-exp>
 /// <logical-or-exp> ::= <logical-and-exp> { "||" <logical-and-exp> }
 /// <logical-and-exp> ::= <bitwise-or-exp> { "&&" <bitwise-or-exp> }
@@ -83,7 +83,7 @@ pub struct Parser<I: Iterator<Item = CToken>> {
 
 impl<I> Parser<I>
 where
-    I: Iterator<Item = CToken>,
+    I: Iterator<Item = CToken> + std::fmt::Debug,
 {
     pub fn new(raw_it: I) -> Parser<I> {
         Parser {
@@ -216,6 +216,10 @@ where
                 self.expect_consume_next_token(CToken::SemiColon)?;
                 Statement::Return(exp)
             }
+            Some(CToken::Keyword(CKeyWord::If)) => {
+                // If expression
+                self.parse_if_statement()?
+            }
             Some(t) => {
                 // A "normal expression".
                 self.it.put_back(t);
@@ -227,7 +231,34 @@ where
         })
     }
 
-    /// <exp> ::= <id> "=" <exp> | <logical-or-exp>
+    fn parse_if_statement(&mut self) -> Result<Statement> {
+        // If tests always need parentheses
+        self.expect_consume_next_token(CToken::OpenParen)?;
+
+        // Parse the conditional expression, and collect the close parenthesis.
+        let cond_exp = self.parse_expression()?;
+        self.expect_consume_next_token(CToken::CloseParen)?;
+
+        // Parse the if statement - currently doesn't allow a block
+        let if_statement = self.parse_statement()?;
+
+        // Do we have an else statement?
+        let else_statement = match self.it.next() {
+            Some(CToken::Keyword(CKeyWord::Else)) => Some(Box::new(self.parse_statement()?)),
+            Some(t) => {
+                self.it.put_back(t);
+                None
+            }
+            None => bail!("Ran out of tokens parsing if statement"),
+        };
+
+        Ok(Statement::If(
+            cond_exp,
+            Box::new(if_statement),
+            else_statement,
+        ))
+    }
+
     fn parse_expression(&mut self) -> Result<Expression> {
         Ok(match (self.it.next(), self.it.next()) {
             (Some(CToken::Identifier(var)), Some(CToken::Assignment)) => {

@@ -78,7 +78,11 @@ impl Codegen {
 
         // Function epilogue
         // - Set the current stack pointer to our current base (which points at the stored value for the callee's stack base pointer)
-        // - Pop the stack to get the base stack pointer for the caller into %rbp
+        // - Pop the stack to get the base stack pointer for the caller into %
+        self.codegen_function_epilogue();
+    }
+
+    fn codegen_function_epilogue(&mut self) {
         self.code.push_str("    mov %rbp, %rsp\n");
         self.code.push_str("    pop %rbp\n");
         self.code.push_str("    ret\n");
@@ -93,9 +97,14 @@ impl Codegen {
 
     fn codegen_statement(&mut self, exp: &Statement) {
         match exp {
-            Statement::Return(exp) => self.codegen_expression(&exp),
+            Statement::Return(exp) => {
+                self.codegen_expression(exp);
+                self.codegen_function_epilogue()
+            }
             Statement::Exp(exp) => self.codegen_expression(exp),
-            Statement::If(_, _, _) => todo!(),
+            Statement::If(cond, if_branch, else_branch) => {
+                self.codegen_if_test(cond, if_branch, else_branch)
+            }
         }
     }
 
@@ -113,6 +122,37 @@ impl Codegen {
             Expression::UnOp(unop, exp) => self.codegen_unop(unop, exp),
             Expression::Constant(c) => self.codegen_constant(*c),
         }
+    }
+
+    fn codegen_if_test(
+        &mut self,
+        cond: &Expression,
+        if_statement: &Box<Statement>,
+        else_statement_opt: &Option<Box<Statement>>,
+    ) {
+        let this_id = self.next_id();
+        let else_label = format!("_else{}", this_id);
+        let end_label = format!("_ifend{}", this_id);
+
+        // Evaluate the conditional expression
+        self.codegen_expression(cond);
+
+        // Compare that value with zero, and if they match (it's false) jump to else
+        self.code.push_str("    cmp $0, %rax\n");
+        self.code.push_str(&format!("    je {}\n", else_label));
+
+        // Evaluate the if statement, then jump to the end of the conditional
+        self.codegen_statement(&*if_statement);
+        self.code.push_str(&format!("    jmp {}\n", end_label));
+
+        // If we have an else expression, throw that in here at the else label
+        self.code.push_str(&format!("{}:\n", else_label));
+        if let Some(else_statment) = else_statement_opt {
+            self.codegen_statement(&*else_statment);
+        }
+
+        // End label for conditional
+        self.code.push_str(&format!("{}:\n", end_label));
     }
 
     fn codegen_constant(&mut self, c: i32) {

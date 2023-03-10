@@ -47,7 +47,7 @@ pub enum Declaration {
 pub enum Statement {
     Return(Expression),
     Exp(Expression),
-    If(Expression, Box<Statement>, Option<Expression>),
+    If(Expression, Box<Statement>, Option<Box<Statement>>),
 }
 
 #[derive(Debug)]
