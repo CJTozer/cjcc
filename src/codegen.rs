@@ -87,6 +87,10 @@ impl Codegen {
         }
     }
 
+    fn write_label(&mut self, var: &String) {
+        self.code.push_str(&format!("{}:\n", var));
+    }
+
     fn codegen_function(&mut self, name: &str, _rtype: &ReturnType, bis: &Vec<BlockItem>) {
         self.code.push_str(&format!("    .globl {}\n", name));
         self.code.push_str(&format!("{}:\n", name));
@@ -146,8 +150,10 @@ impl Codegen {
                 }
                 self.leave_scope();
             }
-            Statement::For(_, _, _, _) => todo!(),
-            Statement::ForDecl(_, _, _, _) => todo!(),
+            Statement::For(init, cond, post, inner) => self.codegen_for(init, cond, post, inner),
+            Statement::ForDecl(init, cond, post, inner) => {
+                self.codegen_for_decl(init, cond, post, inner)
+            }
             Statement::While(test, inner) => self.codegen_while(test, inner),
             Statement::Do(inner, test) => self.codegen_do(test, inner),
             Statement::Break => todo!(),
@@ -197,11 +203,12 @@ impl Codegen {
         self.code.push_str(&format!("    jmp {}\n", end_label));
 
         // If we have an else expression, throw that in here at the else label
+        self.write_label(&else_label);
         self.code.push_str(&format!("{}:\n", else_label));
         self.codegen_expression(&*else_statement);
 
         // End label for conditional
-        self.code.push_str(&format!("{}:\n", end_label));
+        self.write_label(&end_label);
     }
 
     fn codegen_if_test(
@@ -226,13 +233,13 @@ impl Codegen {
         self.code.push_str(&format!("    jmp {}\n", end_label));
 
         // If we have an else expression, throw that in here at the else label
-        self.code.push_str(&format!("{}:\n", else_label));
+        self.write_label(&else_label);
         if let Some(else_statment) = else_statement_opt {
             self.codegen_statement(&*else_statment);
         }
 
         // End label for conditional
-        self.code.push_str(&format!("{}:\n", end_label));
+        self.write_label(&end_label);
     }
 
     fn codegen_while(&mut self, test: &Expression, inner: &Box<Statement>) {
@@ -240,7 +247,7 @@ impl Codegen {
         let start_label = format!("_while{}", this_id);
         let end_label = format!("_endwhile{}", this_id);
         // Start label
-        self.code.push_str(&format!("{}:\n", start_label));
+        self.write_label(&start_label);
         // Evaluate test
         self.codegen_expression(test);
         // If false, jump to end of loop
@@ -250,14 +257,14 @@ impl Codegen {
         self.codegen_statement(inner);
         self.code.push_str(&format!("    jmp {}\n", start_label));
         // End label
-        self.code.push_str(&format!("{}:\n", end_label));
+        self.write_label(&end_label);
     }
 
     fn codegen_do(&mut self, test: &Expression, inner: &Box<Statement>) {
         let this_id = self.next_id();
         let start_label = format!("_while{}", this_id);
         // Start label
-        self.code.push_str(&format!("{}:\n", start_label));
+        self.write_label(&start_label);
         // Evaluate statement and jump back to start
         self.codegen_statement(inner);
         // Evaluate test
@@ -265,6 +272,74 @@ impl Codegen {
         // If true, jump to start of loop
         self.code.push_str("    cmp $0, %rax\n");
         self.code.push_str(&format!("    jne {}\n", start_label));
+    }
+
+    fn codegen_for_decl(
+        &mut self,
+        init: &Declaration,
+        cond: &Expression,
+        post: &Option<Expression>,
+        inner: &Box<Statement>,
+    ) {
+        let this_id = self.next_id();
+        let start_label = format!("_for{}", this_id);
+        let end_label = format!("_endfor{}", this_id);
+        // Enter a new scope - variables defined in the init can shadow outside
+        self.enter_scope();
+        // Evaluate init declaration once
+        self.codegen_declaration(init);
+        // Start label
+        self.write_label(&start_label);
+        // Evaluate condition - jump to end if false
+        self.codegen_expression(cond);
+        self.code.push_str("    cmp $0, %rax\n");
+        self.code.push_str(&format!("    je {}\n", end_label));
+        // Otherwise evaluate the inner statement
+        self.codegen_statement(inner);
+        // Then the post-loop expression, if there is one
+        if let Some(post_exp) = post {
+            self.codegen_expression(post_exp);
+        }
+        // Then jump back to teh start of the loop
+        self.code.push_str(&format!("    jmp {}\n", start_label));
+        // End label and exit scope
+        self.write_label(&end_label);
+        self.leave_scope();
+    }
+
+    fn codegen_for(
+        &mut self,
+        init: &Option<Expression>,
+        cond: &Expression,
+        post: &Option<Expression>,
+        inner: &Box<Statement>,
+    ) {
+        let this_id = self.next_id();
+        let start_label = format!("_for{}", this_id);
+        let end_label = format!("_endfor{}", this_id);
+        // Enter a new scope - variables defined in the init can shadow outside
+        self.enter_scope();
+        // Evaluate init declaration once
+        if let Some(init_exp) = init {
+            self.codegen_expression(init_exp);
+        }
+        // Start label
+        self.write_label(&start_label);
+        // Evaluate condition - jump to end if false
+        self.codegen_expression(cond);
+        self.code.push_str("    cmp $0, %rax\n");
+        self.code.push_str(&format!("    je {}\n", end_label));
+        // Otherwise evaluate the inner statement
+        self.codegen_statement(inner);
+        // Then the post-loop expression, if there is one
+        if let Some(post_exp) = post {
+            self.codegen_expression(post_exp);
+        }
+        // Then jump back to teh start of the loop
+        self.code.push_str(&format!("    jmp {}\n", start_label));
+        // End label and exit scope
+        self.write_label(&end_label);
+        self.leave_scope();
     }
 
     fn codegen_constant(&mut self, c: i32) {
