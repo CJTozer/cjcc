@@ -135,6 +135,12 @@ where
         // Parse block_items until the next token is the end of function '}'.
         let mut block_items = self.parse_block()?;
 
+        // Expect to have consumed all our tokens here - our program is a single "main" function for now
+        if let Some(t) = self.it.next() {
+            self.it.put_back(t);
+            bail!("Unexpected tokens {:?} after end of main function", self.it);
+        }
+
         // If there is no return statement at the end of the main function, return zero.
         if fn_name == "main" {
             match block_items.last() {
