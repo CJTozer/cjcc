@@ -321,6 +321,9 @@ where
         let ret;
         self.expect_consume_next_token(CToken::OpenParen)?;
 
+        // Start a new scope as the init statement can shadow.  The inner block gets _another_ new scope too.
+        self.scope.start_scope();
+
         // Work out if the init statement is a declaration or an expression
         if self.next_statement_is_declaration() {
             // Declaration consumes the semicolon
@@ -345,6 +348,9 @@ where
             let inner = self.parse_statement()?;
             ret = Ok(Statement::For(init, cond, update, Box::new(inner)));
         }
+
+        // Unwind the scope used to allow init statement to shadow
+        self.scope.end_scope();
 
         ret
     }
