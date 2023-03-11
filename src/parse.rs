@@ -192,19 +192,20 @@ where
     }
 
     fn parse_block_item(&mut self) -> Result<BlockItem> {
-        Ok(match self.it.next() {
-            // "int" means we've got a declaration
-            Some(CToken::Keyword(CKeyWord::Int)) => {
-                self.it.put_back(CToken::Keyword(CKeyWord::Int));
-                BlockItem::Declaration(self.parse_declaration()?)
-            }
-            // Anything else should be a statment - we'll handle unexpected errors in there
-            Some(t) => {
-                self.it.put_back(t);
-                BlockItem::Statement(self.parse_statement()?)
-            }
-            _ => bail!("Ran out of tokens parsing block item."),
-        })
+        if self.next_statement_is_declaration() {
+            Ok(BlockItem::Declaration(self.parse_declaration()?))
+        } else {
+            Ok(BlockItem::Statement(self.parse_statement()?))
+        }
+    }
+
+    fn next_statement_is_declaration(&mut self) -> bool {
+        let mut ret = false;
+        if let Some(t) = self.it.next() {
+            ret = t == CToken::Keyword(CKeyWord::Int);
+            self.it.put_back(t);
+        };
+        ret
     }
 
     fn parse_declaration(&mut self) -> Result<Declaration> {
@@ -266,6 +267,17 @@ where
                 // Block - consumes the '}' too.
                 Statement::Compound(self.parse_block()?)
             }
+            Some(CToken::Keyword(CKeyWord::For)) => self.parse_for_loop()?,
+            Some(CToken::Keyword(CKeyWord::While)) => self.parse_while_loop()?,
+            Some(CToken::Keyword(CKeyWord::Do)) => self.parse_do_loop()?,
+            Some(CToken::Keyword(CKeyWord::Break)) => {
+                self.expect_consume_next_token(CToken::SemiColon)?;
+                Statement::Break
+            }
+            Some(CToken::Keyword(CKeyWord::Continue)) => {
+                self.expect_consume_next_token(CToken::SemiColon)?;
+                Statement::Continue
+            }
             Some(t) => {
                 // A "normal expression".
                 self.it.put_back(t);
@@ -273,7 +285,7 @@ where
                 self.expect_consume_next_token(CToken::SemiColon)?;
                 Statement::Exp(exp)
             }
-            _ => bail!("Ran out of tokens parsing statement"),
+            None => bail!("Ran out of tokens parsing statement"),
         })
     }
 
@@ -303,6 +315,46 @@ where
             Box::new(if_statement),
             else_statement,
         ))
+    }
+
+    fn parse_for_loop(&mut self) -> Result<Statement> {
+        let ret;
+        self.expect_consume_next_token(CToken::OpenParen)?;
+
+        // Work out if the init statement is a declaration or an expression
+        if self.next_statement_is_declaration() {
+            // Declaration consumes the semicolon
+            let init = self.parse_declaration()?;
+            let cond = self
+                .parse_opt_expression()?
+                .unwrap_or(Expression::Constant(1));
+            self.expect_consume_next_token(CToken::SemiColon)?;
+            let update = self.parse_opt_expression()?;
+            self.expect_consume_next_token(CToken::CloseParen)?;
+            let inner = self.parse_statement()?;
+            ret = Ok(Statement::ForDecl(init, cond, update, Box::new(inner)));
+        } else {
+            let init = self.parse_opt_expression()?;
+            self.expect_consume_next_token(CToken::SemiColon)?;
+            let cond = self
+                .parse_opt_expression()?
+                .unwrap_or(Expression::Constant(1));
+            self.expect_consume_next_token(CToken::SemiColon)?;
+            let update = self.parse_opt_expression()?;
+            self.expect_consume_next_token(CToken::CloseParen)?;
+            let inner = self.parse_statement()?;
+            ret = Ok(Statement::For(init, cond, update, Box::new(inner)));
+        }
+
+        ret
+    }
+
+    fn parse_while_loop(&mut self) -> Result<Statement> {
+        todo!()
+    }
+
+    fn parse_do_loop(&mut self) -> Result<Statement> {
+        todo!()
     }
 
     /// Parse an expression which may be the null expresison.
