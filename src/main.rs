@@ -49,7 +49,7 @@ fn main() -> Result<()> {
     let mut parser = Parser::new(it);
     let ast = parser.parse()?;
     write!(debug, "** AST:\n")?;
-    write!(debug, "{:?}\n\n", ast)?;
+    write!(debug, "{:#?}\n\n", ast)?;
 
     // Generate code from the AST
     let mut codegen = Codegen::new();
