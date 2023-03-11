@@ -56,6 +56,11 @@ pub enum CKeyWord {
     Return,
     If,
     Else,
+    For,
+    While,
+    Do,
+    Break,
+    Continue,
 }
 
 impl fmt::Display for CKeyWord {
@@ -65,6 +70,11 @@ impl fmt::Display for CKeyWord {
             CKeyWord::Return => write!(f, "return"),
             CKeyWord::If => write!(f, "if"),
             CKeyWord::Else => write!(f, "else"),
+            CKeyWord::For => write!(f, "for"),
+            CKeyWord::While => write!(f, "while"),
+            CKeyWord::Do => write!(f, "do"),
+            CKeyWord::Break => write!(f, "break"),
+            CKeyWord::Continue => write!(f, "continue"),
         }
     }
 }

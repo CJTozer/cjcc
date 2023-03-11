@@ -129,7 +129,11 @@ impl Codegen {
                 self.codegen_expression(exp);
                 self.codegen_function_epilogue()
             }
-            Statement::Exp(exp) => self.codegen_expression(exp),
+            Statement::Exp(o_exp) => {
+                if let Some(exp) = o_exp {
+                    self.codegen_expression(exp)
+                }
+            }
             Statement::If(cond, if_branch, else_branch) => {
                 self.codegen_if_test(cond, if_branch, else_branch)
             }
@@ -141,6 +145,12 @@ impl Codegen {
                 }
                 self.leave_scope();
             }
+            Statement::For(_, _, _, _) => todo!(),
+            Statement::ForDecl(_, _, _, _) => todo!(),
+            Statement::While(_, _) => todo!(),
+            Statement::Do(_, _) => todo!(),
+            Statement::Break => todo!(),
+            Statement::Continue => todo!(),
         }
     }
 

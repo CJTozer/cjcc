@@ -14,10 +14,17 @@ use std::collections::HashMap;
 /// <function> ::= "int" <id> "(" ")" "{" { <block-item> } "}"
 /// <block-item> ::= <statment> | <declaration>
 /// <statement> ::= "return" <exp> ";"
+///               | <exp-option> ";"
 ///               | "if" "(" <exp> ")" <statement> [ "else" <statement> ]
 ///               | "{" { <block-item> } "}"
-///               | <exp> ";"
+///               | "for" "(" <exp-option> ";" <exp-option> ";" <exp-option> ")" <statement>
+///               | "for" "(" <declaration> <exp-option> ";" <exp-option> ")" <statement>
+///               | "while" "(" <exp> ")" <statement>
+///               | "do" <statement> "while" "(" <exp> ")" ";"
+///               | "break" ";"
+///               | "continue" ";"
 /// <declaration> ::= "int" <id> [ = <exp>] ";"
+/// <exp-option> ::= <exp> | ""
 /// <exp> ::= <id> "=" <exp> | <conditional-exp>
 /// <conditional-exp> ::= <logical-or-exp> [ "?" <exp> ":" <conditional-exp> ]
 /// <logical-or-exp> ::= <logical-and-exp> { "||" <logical-and-exp> }
@@ -237,6 +244,14 @@ where
     fn parse_statement(&mut self) -> Result<Statement> {
         // Can be a return statement, a variable declaration, or an expression.
         Ok(match self.it.next() {
+            // TODO
+            // - "normal expression" should be exp-option and handle the null expression case (if next token is ')' or ';')
+            // - | "for" "(" <exp-option> ";" <exp-option> ";" <exp-option> ")" <statement>
+            // - | "for" "(" <declaration> <exp-option> ";" <exp-option> ")" <statement>
+            // - | "while" "(" <exp> ")" <statement>
+            // - | "do" <statement> "while" "(" <exp> ")" ";"
+            // - | "break" ";"
+            // - | "continue" ";"
             Some(CToken::Keyword(CKeyWord::Return)) => {
                 // Return expression
                 let exp = self.parse_expression()?;
@@ -254,7 +269,7 @@ where
             Some(t) => {
                 // A "normal expression".
                 self.it.put_back(t);
-                let exp = self.parse_expression()?;
+                let exp = self.parse_opt_expression()?;
                 self.expect_consume_next_token(CToken::SemiColon)?;
                 Statement::Exp(exp)
             }
@@ -288,6 +303,21 @@ where
             Box::new(if_statement),
             else_statement,
         ))
+    }
+
+    /// Parse an expression which may be the null expresison.
+    fn parse_opt_expression(&mut self) -> Result<Option<Expression>> {
+        Ok(match self.it.next() {
+            Some(t) if t == CToken::SemiColon || t == CToken::CloseBrace => {
+                self.it.put_back(t);
+                None
+            }
+            Some(t) => {
+                self.it.put_back(t);
+                Some(self.parse_expression()?)
+            }
+            _ => bail!("Ran out of tokens parsing (optional) expression"),
+        })
     }
 
     fn parse_expression(&mut self) -> Result<Expression> {
