@@ -14,10 +14,17 @@ use std::collections::HashMap;
 /// <function> ::= "int" <id> "(" ")" "{" { <block-item> } "}"
 /// <block-item> ::= <statment> | <declaration>
 /// <statement> ::= "return" <exp> ";"
+///               | <exp-option> ";"
 ///               | "if" "(" <exp> ")" <statement> [ "else" <statement> ]
 ///               | "{" { <block-item> } "}"
-///               | <exp> ";"
+///               | "for" "(" <exp-option> ";" <exp-option> ";" <exp-option> ")" <statement>
+///               | "for" "(" <declaration> <exp-option> ";" <exp-option> ")" <statement>
+///               | "while" "(" <exp> ")" <statement>
+///               | "do" <statement> "while" "(" <exp> ")" ";"
+///               | "break" ";"
+///               | "continue" ";"
 /// <declaration> ::= "int" <id> [ = <exp>] ";"
+/// <exp-option> ::= <exp> | ""
 /// <exp> ::= <id> "=" <exp> | <conditional-exp>
 /// <conditional-exp> ::= <logical-or-exp> [ "?" <exp> ":" <conditional-exp> ]
 /// <logical-or-exp> ::= <logical-and-exp> { "||" <logical-and-exp> }
@@ -185,19 +192,20 @@ where
     }
 
     fn parse_block_item(&mut self) -> Result<BlockItem> {
-        Ok(match self.it.next() {
-            // "int" means we've got a declaration
-            Some(CToken::Keyword(CKeyWord::Int)) => {
-                self.it.put_back(CToken::Keyword(CKeyWord::Int));
-                BlockItem::Declaration(self.parse_declaration()?)
-            }
-            // Anything else should be a statment - we'll handle unexpected errors in there
-            Some(t) => {
-                self.it.put_back(t);
-                BlockItem::Statement(self.parse_statement()?)
-            }
-            _ => bail!("Ran out of tokens parsing block item."),
-        })
+        if self.next_statement_is_declaration() {
+            Ok(BlockItem::Declaration(self.parse_declaration()?))
+        } else {
+            Ok(BlockItem::Statement(self.parse_statement()?))
+        }
+    }
+
+    fn next_statement_is_declaration(&mut self) -> bool {
+        let mut ret = false;
+        if let Some(t) = self.it.next() {
+            ret = t == CToken::Keyword(CKeyWord::Int);
+            self.it.put_back(t);
+        };
+        ret
     }
 
     fn parse_declaration(&mut self) -> Result<Declaration> {
@@ -237,6 +245,14 @@ where
     fn parse_statement(&mut self) -> Result<Statement> {
         // Can be a return statement, a variable declaration, or an expression.
         Ok(match self.it.next() {
+            // TODO
+            // - "normal expression" should be exp-option and handle the null expression case (if next token is ')' or ';')
+            // - | "for" "(" <exp-option> ";" <exp-option> ";" <exp-option> ")" <statement>
+            // - | "for" "(" <declaration> <exp-option> ";" <exp-option> ")" <statement>
+            // - | "while" "(" <exp> ")" <statement>
+            // - | "do" <statement> "while" "(" <exp> ")" ";"
+            // - | "break" ";"
+            // - | "continue" ";"
             Some(CToken::Keyword(CKeyWord::Return)) => {
                 // Return expression
                 let exp = self.parse_expression()?;
@@ -251,14 +267,25 @@ where
                 // Block - consumes the '}' too.
                 Statement::Compound(self.parse_block()?)
             }
+            Some(CToken::Keyword(CKeyWord::For)) => self.parse_for_loop()?,
+            Some(CToken::Keyword(CKeyWord::While)) => self.parse_while_loop()?,
+            Some(CToken::Keyword(CKeyWord::Do)) => self.parse_do_loop()?,
+            Some(CToken::Keyword(CKeyWord::Break)) => {
+                self.expect_consume_next_token(CToken::SemiColon)?;
+                Statement::Break
+            }
+            Some(CToken::Keyword(CKeyWord::Continue)) => {
+                self.expect_consume_next_token(CToken::SemiColon)?;
+                Statement::Continue
+            }
             Some(t) => {
                 // A "normal expression".
                 self.it.put_back(t);
-                let exp = self.parse_expression()?;
+                let exp = self.parse_opt_expression()?;
                 self.expect_consume_next_token(CToken::SemiColon)?;
                 Statement::Exp(exp)
             }
-            _ => bail!("Ran out of tokens parsing statement"),
+            None => bail!("Ran out of tokens parsing statement"),
         })
     }
 
@@ -288,6 +315,75 @@ where
             Box::new(if_statement),
             else_statement,
         ))
+    }
+
+    fn parse_for_loop(&mut self) -> Result<Statement> {
+        let ret;
+        self.expect_consume_next_token(CToken::OpenParen)?;
+
+        // Start a new scope as the init statement can shadow.  The inner block gets _another_ new scope too.
+        self.scope.start_scope();
+
+        // Work out if the init statement is a declaration or an expression
+        if self.next_statement_is_declaration() {
+            // Declaration consumes the semicolon
+            let init = self.parse_declaration()?;
+            let cond = self
+                .parse_opt_expression()?
+                .unwrap_or(Expression::Constant(1));
+            self.expect_consume_next_token(CToken::SemiColon)?;
+            let update = self.parse_opt_expression()?;
+            self.expect_consume_next_token(CToken::CloseParen)?;
+            let inner = self.parse_statement()?;
+            ret = Ok(Statement::ForDecl(init, cond, update, Box::new(inner)));
+        } else {
+            let init = self.parse_opt_expression()?;
+            self.expect_consume_next_token(CToken::SemiColon)?;
+            let cond = self
+                .parse_opt_expression()?
+                .unwrap_or(Expression::Constant(1));
+            self.expect_consume_next_token(CToken::SemiColon)?;
+            let update = self.parse_opt_expression()?;
+            self.expect_consume_next_token(CToken::CloseParen)?;
+            let inner = self.parse_statement()?;
+            ret = Ok(Statement::For(init, cond, update, Box::new(inner)));
+        }
+
+        // Unwind the scope used to allow init statement to shadow
+        self.scope.end_scope();
+
+        ret
+    }
+
+    fn parse_while_loop(&mut self) -> Result<Statement> {
+        self.expect_consume_next_token(CToken::OpenParen)?;
+        let exp = self.parse_expression()?;
+        self.expect_consume_next_token(CToken::CloseParen)?;
+        let inner = self.parse_statement()?;
+        Ok(Statement::While(exp, Box::new(inner)))
+    }
+
+    fn parse_do_loop(&mut self) -> Result<Statement> {
+        let inner = self.parse_statement()?;
+        self.expect_consume_next_token(CToken::Keyword(CKeyWord::While))?;
+        let exp = self.parse_expression()?;
+        self.expect_consume_next_token(CToken::SemiColon)?;
+        Ok(Statement::Do(Box::new(inner), exp))
+    }
+
+    /// Parse an expression which may be the null expresison.
+    fn parse_opt_expression(&mut self) -> Result<Option<Expression>> {
+        Ok(match self.it.next() {
+            Some(t) if t == CToken::SemiColon || t == CToken::CloseParen => {
+                self.it.put_back(t);
+                None
+            }
+            Some(t) => {
+                self.it.put_back(t);
+                Some(self.parse_expression()?)
+            }
+            _ => bail!("Ran out of tokens parsing (optional) expression"),
+        })
     }
 
     fn parse_expression(&mut self) -> Result<Expression> {

@@ -5,11 +5,17 @@
 /// function_declaration = Function(string, block_item list) // string is the function name
 ///
 /// statement = Return(exp)
-///           | Exp(exp)
+///           | Exp(exp option)
 ///           | If(exp, statement, statement option) // exp is controlling condition
 ///                                                  // first statement is if branch
 ///                                                  // second (optional) statement is else branch
 ///           | Compound(block_item list)
+///           | For(exp option, exp, exp option, statement) // initial expression, condition, post-expression, body
+///           | ForDecl(declaration, exp, exp option, statement) // initial declaration, condition, post-expression, body
+///           | While(expression, statement) // condition, body
+///           | Do(statement, expression) // body, condition
+///           | Break
+///           | Continue
 ///
 /// declaration = Declare(string, exp option) // string is variable name
 ///                                           // exp is optional initializer
@@ -47,9 +53,20 @@ pub enum Declaration {
 #[derive(Debug)]
 pub enum Statement {
     Return(Expression),
-    Exp(Expression),
+    Exp(Option<Expression>),
     If(Expression, Box<Statement>, Option<Box<Statement>>),
     Compound(Vec<BlockItem>),
+    For(
+        Option<Expression>,
+        Expression,
+        Option<Expression>,
+        Box<Statement>,
+    ),
+    ForDecl(Declaration, Expression, Option<Expression>, Box<Statement>),
+    While(Expression, Box<Statement>),
+    Do(Box<Statement>, Expression),
+    Break,
+    Continue,
 }
 
 #[derive(Debug)]
