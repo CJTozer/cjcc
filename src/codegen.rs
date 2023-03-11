@@ -149,7 +149,7 @@ impl Codegen {
             Statement::For(_, _, _, _) => todo!(),
             Statement::ForDecl(_, _, _, _) => todo!(),
             Statement::While(test, inner) => self.codegen_while(test, inner),
-            Statement::Do(_, _) => todo!(),
+            Statement::Do(inner, test) => self.codegen_do(test, inner),
             Statement::Break => todo!(),
             Statement::Continue => todo!(),
         }
@@ -251,6 +251,20 @@ impl Codegen {
         self.code.push_str(&format!("    jmp {}\n", start_label));
         // End label
         self.code.push_str(&format!("{}:\n", end_label));
+    }
+
+    fn codegen_do(&mut self, test: &Expression, inner: &Box<Statement>) {
+        let this_id = self.next_id();
+        let start_label = format!("_while{}", this_id);
+        // Start label
+        self.code.push_str(&format!("{}:\n", start_label));
+        // Evaluate statement and jump back to start
+        self.codegen_statement(inner);
+        // Evaluate test
+        self.codegen_expression(test);
+        // If true, jump to start of loop
+        self.code.push_str("    cmp $0, %rax\n");
+        self.code.push_str(&format!("    jne {}\n", start_label));
     }
 
     fn codegen_constant(&mut self, c: i32) {
