@@ -368,7 +368,7 @@ where
     /// Parse an expression which may be the null expresison.
     fn parse_opt_expression(&mut self) -> Result<Option<Expression>> {
         Ok(match self.it.next() {
-            Some(t) if t == CToken::SemiColon || t == CToken::CloseBrace => {
+            Some(t) if t == CToken::SemiColon || t == CToken::CloseParen => {
                 self.it.put_back(t);
                 None
             }
