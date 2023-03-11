@@ -12,6 +12,9 @@ pub struct Codegen {
     global_id: i32,
     /// The next available index on the stack.  When %rbp == %rsp, this is initially -8.
     stack_index: i32,
+    /// The size of stack allocated at this scope
+    current_scope_stack_size: i32,
+    previous_scope_stack_sizes: Vec<i32>,
     /// The set of variables that have been declared in this context.
     /// This stores the identifier and stack index.
     variables: HashMap<String, i32>,
@@ -24,6 +27,8 @@ impl Codegen {
         Codegen {
             global_id: 0,
             stack_index: -8,
+            current_scope_stack_size: 0,
+            previous_scope_stack_sizes: Vec::new(),
             variables: HashMap::new(),
             code: String::new(),
         }
@@ -52,7 +57,27 @@ impl Codegen {
             // Record the stack frame containing this variable, and move the stack index on
             self.variables.insert(var, self.stack_index);
             self.stack_index -= 8;
+            self.current_scope_stack_size += 8;
         }
+    }
+
+    fn enter_scope(&mut self) {
+        // Push the current stack size onto the list and reinitialize
+        self.previous_scope_stack_sizes
+            .push(self.current_scope_stack_size);
+        self.current_scope_stack_size = 0;
+    }
+
+    fn leave_scope(&mut self) {
+        // Drop any local variables going out of scope, and pop the parent scope stack size
+        if self.current_scope_stack_size > 0 {
+            self.code.push_str(&format!(
+                "    add ${}, %rsp\n",
+                self.current_scope_stack_size
+            ));
+            self.stack_index += self.current_scope_stack_size;
+        }
+        self.current_scope_stack_size = self.previous_scope_stack_sizes.pop().unwrap();
     }
 
     fn get_stack_index(&self, var: &String) -> i32 {
@@ -72,9 +97,12 @@ impl Codegen {
         self.code.push_str("    push %rbp\n");
         self.code.push_str("    mov %rsp, %rbp\n");
 
+        // Enter a new scope for the block
+        self.enter_scope();
         for bi in bis {
             self.codegen_block_item(bi)
         }
+        self.leave_scope();
 
         // Function epilogue
         // - Set the current stack pointer to our current base (which points at the stored value for the callee's stack base pointer)
@@ -104,6 +132,14 @@ impl Codegen {
             Statement::Exp(exp) => self.codegen_expression(exp),
             Statement::If(cond, if_branch, else_branch) => {
                 self.codegen_if_test(cond, if_branch, else_branch)
+            }
+            Statement::Compound(bis) => {
+                // Enter a new scope for the block
+                self.enter_scope();
+                for bi in bis {
+                    self.codegen_block_item(bi);
+                }
+                self.leave_scope();
             }
         }
     }

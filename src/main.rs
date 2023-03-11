@@ -15,6 +15,7 @@ mod ast;
 mod codegen;
 mod lex;
 mod parse;
+mod scope;
 
 // TODO
 // - add tests for the remaining "stage 5" operators: +=, -=, /=, *=, %=, <<=, >>=, &=, |=, ^=, comma, ++, -- (both prefix and postfix)
@@ -48,7 +49,7 @@ fn main() -> Result<()> {
     let mut parser = Parser::new(it);
     let ast = parser.parse()?;
     write!(debug, "** AST:\n")?;
-    write!(debug, "{:?}\n\n", ast)?;
+    write!(debug, "{:#?}\n\n", ast)?;
 
     // Generate code from the AST
     let mut codegen = Codegen::new();
