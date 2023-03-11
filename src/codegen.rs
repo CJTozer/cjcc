@@ -18,6 +18,10 @@ pub struct Codegen {
     /// The set of variables that have been declared in this context.
     /// This stores the identifier and stack index.
     variables: HashMap<String, i32>,
+    /// The stack of labels that a "continue" statement will point to
+    continue_labels: Vec<String>,
+    /// The stack of labels that a "break" statement will point to
+    break_labels: Vec<String>,
     /// The string containing the code generated so far
     code: String,
 }
@@ -30,6 +34,8 @@ impl Codegen {
             current_scope_stack_size: 0,
             previous_scope_stack_sizes: Vec::new(),
             variables: HashMap::new(),
+            continue_labels: Vec::new(),
+            break_labels: Vec::new(),
             code: String::new(),
         }
     }
@@ -61,14 +67,22 @@ impl Codegen {
         }
     }
 
-    fn enter_scope(&mut self) {
+    fn enter_scope(&mut self, continue_label: Option<String>, break_label: Option<String>) {
         // Push the current stack size onto the list and reinitialize
         self.previous_scope_stack_sizes
             .push(self.current_scope_stack_size);
         self.current_scope_stack_size = 0;
+
+        // Push the continue and break labels, if passed
+        if let Some(cl) = continue_label {
+            self.continue_labels.push(cl);
+        }
+        if let Some(bl) = break_label {
+            self.break_labels.push(bl);
+        }
     }
 
-    fn leave_scope(&mut self) {
+    fn leave_scope(&mut self, pop_continue: bool, pop_break: bool) {
         // Drop any local variables going out of scope, and pop the parent scope stack size
         if self.current_scope_stack_size > 0 {
             self.code.push_str(&format!(
@@ -78,6 +92,28 @@ impl Codegen {
             self.stack_index += self.current_scope_stack_size;
         }
         self.current_scope_stack_size = self.previous_scope_stack_sizes.pop().unwrap();
+
+        // Pop the continue and break labels, if appropriate
+        if pop_continue {
+            assert!(!self.continue_labels.is_empty());
+            self.continue_labels.pop();
+        }
+        if pop_break {
+            assert!(!self.break_labels.is_empty());
+            self.break_labels.pop();
+        }
+    }
+
+    fn get_continue_label(&self) -> &String {
+        self.continue_labels
+            .last()
+            .expect("Called get_continue_label with no continue label set")
+    }
+
+    fn get_break_label(&self) -> &String {
+        self.break_labels
+            .last()
+            .expect("Called get_break_label with no break label set")
     }
 
     fn get_stack_index(&self, var: &String) -> i32 {
@@ -102,11 +138,11 @@ impl Codegen {
         self.code.push_str("    mov %rsp, %rbp\n");
 
         // Enter a new scope for the block
-        self.enter_scope();
+        self.enter_scope(None, None);
         for bi in bis {
             self.codegen_block_item(bi)
         }
-        self.leave_scope();
+        self.leave_scope(false, false);
 
         // Function epilogue
         // - Set the current stack pointer to our current base (which points at the stored value for the callee's stack base pointer)
@@ -144,11 +180,11 @@ impl Codegen {
             }
             Statement::Compound(bis) => {
                 // Enter a new scope for the block
-                self.enter_scope();
+                self.enter_scope(None, None);
                 for bi in bis {
                     self.codegen_block_item(bi);
                 }
-                self.leave_scope();
+                self.leave_scope(false, false);
             }
             Statement::For(init, cond, post, inner) => self.codegen_for(init, cond, post, inner),
             Statement::ForDecl(init, cond, post, inner) => {
@@ -156,8 +192,8 @@ impl Codegen {
             }
             Statement::While(test, inner) => self.codegen_while(test, inner),
             Statement::Do(inner, test) => self.codegen_do(test, inner),
-            Statement::Break => todo!(),
-            Statement::Continue => todo!(),
+            Statement::Break => self.codegen_break(),
+            Statement::Continue => self.codegen_continue(),
         }
     }
 
@@ -283,9 +319,10 @@ impl Codegen {
     ) {
         let this_id = self.next_id();
         let start_label = format!("_for{}", this_id);
+        let post_label = format!("_postfor{}", this_id);
         let end_label = format!("_endfor{}", this_id);
         // Enter a new scope - variables defined in the init can shadow outside
-        self.enter_scope();
+        self.enter_scope(Some(post_label.clone()), Some(end_label.clone()));
         // Evaluate init declaration once
         self.codegen_declaration(init);
         // Start label
@@ -297,6 +334,7 @@ impl Codegen {
         // Otherwise evaluate the inner statement
         self.codegen_statement(inner);
         // Then the post-loop expression, if there is one
+        self.write_label(&post_label);
         if let Some(post_exp) = post {
             self.codegen_expression(post_exp);
         }
@@ -304,7 +342,7 @@ impl Codegen {
         self.code.push_str(&format!("    jmp {}\n", start_label));
         // End label and exit scope
         self.write_label(&end_label);
-        self.leave_scope();
+        self.leave_scope(true, true);
     }
 
     fn codegen_for(
@@ -316,9 +354,10 @@ impl Codegen {
     ) {
         let this_id = self.next_id();
         let start_label = format!("_for{}", this_id);
+        let post_label = format!("_postfor{}", this_id);
         let end_label = format!("_endfor{}", this_id);
         // Enter a new scope - variables defined in the init can shadow outside
-        self.enter_scope();
+        self.enter_scope(Some(post_label.clone()), Some(end_label.clone()));
         // Evaluate init declaration once
         if let Some(init_exp) = init {
             self.codegen_expression(init_exp);
@@ -332,6 +371,7 @@ impl Codegen {
         // Otherwise evaluate the inner statement
         self.codegen_statement(inner);
         // Then the post-loop expression, if there is one
+        self.write_label(&post_label);
         if let Some(post_exp) = post {
             self.codegen_expression(post_exp);
         }
@@ -339,7 +379,17 @@ impl Codegen {
         self.code.push_str(&format!("    jmp {}\n", start_label));
         // End label and exit scope
         self.write_label(&end_label);
-        self.leave_scope();
+        self.leave_scope(true, true);
+    }
+
+    fn codegen_continue(&mut self) {
+        let target_label = self.get_continue_label();
+        self.code.push_str(&format!("    jmp {}\n", target_label));
+    }
+
+    fn codegen_break(&mut self) {
+        let target_label = self.get_break_label();
+        self.code.push_str(&format!("    jmp {}\n", target_label));
     }
 
     fn codegen_constant(&mut self, c: i32) {
