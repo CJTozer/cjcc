@@ -349,7 +349,6 @@ where
         ret
     }
 
-    /// "while" "(" <exp> ")" <statement>
     fn parse_while_loop(&mut self) -> Result<Statement> {
         self.expect_consume_next_token(CToken::OpenParen)?;
         let exp = self.parse_expression()?;
@@ -358,11 +357,11 @@ where
         Ok(Statement::While(exp, Box::new(inner)))
     }
 
-    /// "do" <statement> "while" "(" <exp> ")" ";"
     fn parse_do_loop(&mut self) -> Result<Statement> {
         let inner = self.parse_statement()?;
         self.expect_consume_next_token(CToken::Keyword(CKeyWord::While))?;
         let exp = self.parse_expression()?;
+        self.expect_consume_next_token(CToken::SemiColon)?;
         Ok(Statement::Do(Box::new(inner), exp))
     }
 

@@ -130,6 +130,7 @@ impl Codegen {
                 self.codegen_function_epilogue()
             }
             Statement::Exp(o_exp) => {
+                // No codegen for a null statement
                 if let Some(exp) = o_exp {
                     self.codegen_expression(exp)
                 }
@@ -147,7 +148,7 @@ impl Codegen {
             }
             Statement::For(_, _, _, _) => todo!(),
             Statement::ForDecl(_, _, _, _) => todo!(),
-            Statement::While(_, _) => todo!(),
+            Statement::While(test, inner) => self.codegen_while(test, inner),
             Statement::Do(_, _) => todo!(),
             Statement::Break => todo!(),
             Statement::Continue => todo!(),
@@ -160,7 +161,7 @@ impl Codegen {
         }
     }
 
-    fn codegen_expression<'a>(&mut self, exp: &'a Expression) {
+    fn codegen_expression(&mut self, exp: &Expression) {
         match exp {
             Expression::Assign(varname, exp) => self.codegen_assign(varname, exp),
             Expression::Var(varname) => self.codegen_var(varname),
@@ -231,6 +232,24 @@ impl Codegen {
         }
 
         // End label for conditional
+        self.code.push_str(&format!("{}:\n", end_label));
+    }
+
+    fn codegen_while(&mut self, test: &Expression, inner: &Box<Statement>) {
+        let this_id = self.next_id();
+        let start_label = format!("_while{}", this_id);
+        let end_label = format!("_endwhile{}", this_id);
+        // Start label
+        self.code.push_str(&format!("{}:\n", start_label));
+        // Evaluate test
+        self.codegen_expression(test);
+        // If false, jump to end of loop
+        self.code.push_str("    cmp $0, %rax\n");
+        self.code.push_str(&format!("    je {}\n", end_label));
+        // Evaluate statement and jump back to start
+        self.codegen_statement(inner);
+        self.code.push_str(&format!("    jmp {}\n", start_label));
+        // End label
         self.code.push_str(&format!("{}:\n", end_label));
     }
 
