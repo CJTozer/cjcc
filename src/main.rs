@@ -15,6 +15,7 @@ mod ast;
 mod codegen;
 mod lex;
 mod parse;
+mod scope;
 
 // TODO
 // - add tests for the remaining "stage 5" operators: +=, -=, /=, *=, %=, <<=, >>=, &=, |=, ^=, comma, ++, -- (both prefix and postfix)

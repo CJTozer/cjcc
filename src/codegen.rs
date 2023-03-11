@@ -105,7 +105,11 @@ impl Codegen {
             Statement::If(cond, if_branch, else_branch) => {
                 self.codegen_if_test(cond, if_branch, else_branch)
             }
-            Statement::Compound(_) => todo!(),
+            Statement::Compound(bis) => {
+                for bi in bis {
+                    self.codegen_block_item(bi)
+                }
+            }
         }
     }
 

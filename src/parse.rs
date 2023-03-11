@@ -3,6 +3,7 @@ use crate::ast::{
     UnaryOperator,
 };
 use crate::lex::{CKeyWord, CToken};
+use crate::scope::Scope;
 use anyhow::{bail, Result};
 use itertools::{put_back_n, PutBackN};
 use std::collections::HashMap;
@@ -81,6 +82,7 @@ impl BinOpPrecedence {
 
 pub struct Parser<I: Iterator<Item = CToken>> {
     it: PutBackN<I>,
+    scope: Box<Scope>,
 }
 
 impl<I> Parser<I>
@@ -90,6 +92,7 @@ where
     pub fn new(raw_it: I) -> Parser<I> {
         Parser {
             it: put_back_n(raw_it),
+            scope: Box::new(Scope::top_level()),
         }
     }
 
@@ -116,6 +119,8 @@ where
         // Get the function name
         let t = self.it.next();
         let fn_name = if let Some(CToken::Identifier(name)) = t {
+            // TODO do I need to make this unique for this scope?
+            self.scope.declare_variable(&name.clone())?;
             name
         } else {
             bail!("Expected function name identifier, got {:?}", t);
@@ -128,7 +133,7 @@ where
         self.expect_consume_next_token(CToken::OpenBrace)?;
 
         // Parse block_items until the next token is the end of function '}'.
-        let mut block_items = self.parse_block_item_list()?;
+        let mut block_items = self.parse_block()?;
 
         // If there is no return statement at the end of the main function, return zero.
         if fn_name == "main" {
@@ -145,7 +150,9 @@ where
         Ok(Program::Function(fn_name.to_string(), rtype, block_items))
     }
 
-    fn parse_block_item_list(&mut self) -> Result<Vec<BlockItem>> {
+    fn parse_block(&mut self) -> Result<Vec<BlockItem>> {
+        // Enter a new scope
+        self.scope.start_scope();
         let mut bi_list = Vec::new();
         loop {
             match self.parse_next_block_item()? {
@@ -155,6 +162,8 @@ where
                 None => break,
             }
         }
+        // Drop out of this scope.
+        self.scope.end_scope();
         Ok(bi_list)
     }
 
@@ -190,17 +199,17 @@ where
             Some(CToken::Keyword(CKeyWord::Int)) => {
                 match self.it.next() {
                     Some(CToken::Identifier(varname)) => {
+                        // Add the variable to this scope (will error if this is a duplicate)
+                        let var_uid = self.scope.declare_variable(&varname.clone())?;
                         // There may or may not be an expression following the declaration to set the value.
                         match self.it.next() {
                             // Variable not assigned on declaration
-                            Some(CToken::SemiColon) => {
-                                Declaration::Declare(varname.to_string(), None)
-                            }
+                            Some(CToken::SemiColon) => Declaration::Declare(var_uid, None),
                             // Variable given a value
                             Some(CToken::Assignment) => {
                                 let exp = self.parse_expression()?;
                                 self.expect_consume_next_token(CToken::SemiColon)?;
-                                Declaration::Declare(varname.to_string(), Some(exp))
+                                Declaration::Declare(var_uid, Some(exp))
                             }
                             Some(t) => {
                                 bail!("Unexpected token {:?} when parsing assignment for {} (expecting '=' or ';'", t, varname)
@@ -231,6 +240,10 @@ where
             Some(CToken::Keyword(CKeyWord::If)) => {
                 // If expression
                 self.parse_if_statement()?
+            }
+            Some(CToken::OpenBrace) => {
+                // Block - consumes the '}' too.
+                Statement::Compound(self.parse_block()?)
             }
             Some(t) => {
                 // A "normal expression".
@@ -274,8 +287,9 @@ where
     fn parse_expression(&mut self) -> Result<Expression> {
         Ok(match (self.it.next(), self.it.next()) {
             (Some(CToken::Identifier(var)), Some(CToken::Assignment)) => {
+                let var_uid = self.scope.check_variable_in_scope(&var)?;
                 let inner = self.parse_expression()?;
-                Expression::Assign(var.to_string(), Box::new(inner))
+                Expression::Assign(var_uid, Box::new(inner))
             }
             (Some(a), Some(b)) => {
                 self.it.put_back(b);
@@ -400,7 +414,10 @@ where
                 self.expect_consume_next_token(CToken::CloseParen)?;
                 inner
             }
-            Some(CToken::Identifier(var)) => Expression::Var(var.to_string()),
+            Some(CToken::Identifier(var)) => {
+                let var_uid = self.scope.check_variable_in_scope(&var)?;
+                Expression::Var(var_uid)
+            }
             _ => bail!("Unexpected token parsing factor: {:?}", t),
         })
     }
