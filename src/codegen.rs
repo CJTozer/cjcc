@@ -223,6 +223,7 @@ impl Codegen {
             Expression::Conditional(cond, if_branch, else_branch) => {
                 self.codegen_ternary(cond, if_branch, else_branch)
             }
+            Expression::FunCall(name, params) => todo!(),
         }
     }
 

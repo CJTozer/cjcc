@@ -27,6 +27,7 @@
 ///     | BinOp(binary_operator, exp, exp)
 ///     | UnOp(unary_operator, exp)
 ///     | Constant(int)
+///     | FunCall(string, exp list)
 /// ```
 
 #[derive(Debug)]
@@ -77,6 +78,7 @@ pub enum Expression {
     UnOp(UnaryOperator, Box<Expression>),
     Constant(i32),
     Conditional(Box<Expression>, Box<Expression>, Box<Expression>),
+    FunCall(String, Vec<Expression>),
 }
 
 #[derive(Debug)]

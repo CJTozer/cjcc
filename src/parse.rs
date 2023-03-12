@@ -37,7 +37,8 @@ use std::collections::HashMap;
 /// <shift-exp> ::= <additive-exp> { ("<<" | ">>") <additive-exp> }
 /// <additive-exp> ::= <term> { ("+" | "-") <term> }
 /// <term> ::= <factor> { ("*" | "/" | "%") <factor> }
-/// <factor> ::= "(" <exp> ")" | <unary_op> <factor> | <int> | <id>
+/// <factor> ::= <function-call> | "(" <exp> ")" | <unary_op> <factor> | <int> | <id>
+/// <function-call> ::= id "(" [ <exp> { "," <exp> } ] ")"
 /// <unary_op> ::= "!" | "~" | "-"
 /// ```
 
