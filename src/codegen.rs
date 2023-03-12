@@ -43,7 +43,9 @@ impl Codegen {
     pub fn emit_code(&mut self, prog: &Program) -> &str {
         // Currently a program is a single function
         match prog {
-            Program::Function(name, rtype, func) => self.codegen_function(name, rtype, func),
+            Program::Function(name, rtype, params, func) => {
+                self.codegen_function(name, rtype, params, func)
+            }
         }
 
         &self.code
@@ -127,7 +129,13 @@ impl Codegen {
         self.code.push_str(&format!("{}:\n", var));
     }
 
-    fn codegen_function(&mut self, name: &str, _rtype: &ReturnType, bis: &Vec<BlockItem>) {
+    fn codegen_function(
+        &mut self,
+        name: &str,
+        _rtype: &ReturnType,
+        params: &Vec<String>,
+        block: &Option<Vec<BlockItem>>,
+    ) {
         self.code.push_str(&format!("    .globl {}\n", name));
         self.code.push_str(&format!("{}:\n", name));
 
@@ -138,11 +146,13 @@ impl Codegen {
         self.code.push_str("    mov %rsp, %rbp\n");
 
         // Enter a new scope for the block
-        self.enter_scope(None, None);
-        for bi in bis {
-            self.codegen_block_item(bi)
+        if let Some(bis) = block {
+            self.enter_scope(None, None);
+            for bi in bis {
+                self.codegen_block_item(bi)
+            }
+            self.leave_scope(false, false);
         }
-        self.leave_scope(false, false);
 
         // Function epilogue
         // - Set the current stack pointer to our current base (which points at the stored value for the callee's stack base pointer)

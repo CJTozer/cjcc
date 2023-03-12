@@ -11,7 +11,7 @@ use std::collections::HashMap;
 /// Simplified for only the use-cases we have at any point
 /// ```
 /// <program> ::= <function>
-/// <function> ::= "int" <id> "(" ")" "{" { <block-item> } "}"
+/// <function> ::= "int" <id> "(" [ "int" <id> { "," "int" <id> } ] ")" ( "{" { <block-item> } "}" | ";" )
 /// <block-item> ::= <statment> | <declaration>
 /// <statement> ::= "return" <exp> ";"
 ///               | <exp-option> ";"
@@ -135,11 +135,14 @@ where
 
         // Only accept empty parens '()'
         self.expect_consume_next_token(CToken::OpenParen)?;
+        // TODO parse any function parameters
+        let parameters = Vec::new();
         self.expect_consume_next_token(CToken::CloseParen)?;
         // Next, open brace to start function body
         self.expect_consume_next_token(CToken::OpenBrace)?;
 
         // Parse block_items until the next token is the end of function '}'.
+        // TODO there may be no block in a declaration (rather than a definition).
         let mut block_items = self.parse_block()?;
 
         // Expect to have consumed all our tokens here - our program is a single "main" function for now
@@ -160,7 +163,12 @@ where
             }
         }
 
-        Ok(Program::Function(fn_name.to_string(), rtype, block_items))
+        Ok(Program::Function(
+            fn_name.to_string(),
+            rtype,
+            parameters,
+            Some(block_items),
+        ))
     }
 
     fn parse_block(&mut self) -> Result<Vec<BlockItem>> {

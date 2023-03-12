@@ -31,7 +31,7 @@
 
 #[derive(Debug)]
 pub enum Program {
-    Function(String, ReturnType, Vec<BlockItem>),
+    Function(String, ReturnType, Vec<String>, Option<Vec<BlockItem>>),
 }
 
 #[derive(Debug)]

@@ -46,6 +46,8 @@ pub enum CToken {
     ComparisonGreaterThanEq, // >=
     // Assignment
     Assignment, // =
+    // Specials
+    Comma, // ,
     // Whitespace
     Whitespace,
 }
@@ -136,7 +138,8 @@ fn next_token(data: &str) -> Result<(CToken, usize)> {
             '=' => parse_equals_token(data),
             '>' => parse_gt_token(data),
             '<' => parse_lt_token(data),
-            // Anything left (at this point, should be a keyword or identifier - we don't handle commas etc. yet)
+            ',' => Ok((CToken::Comma, 1)),
+            // Anything left (at this point, should be a keyword or identifier - or something we don't handle yet)
             _ => keyword_or_identifier_from_slice(data),
         },
     }
