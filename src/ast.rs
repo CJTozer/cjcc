@@ -1,8 +1,10 @@
 //     | Constant(int)
 /// ```
-/// program = Program(function_declaration)
+/// program = Program(function_declaration list)
 ///
-/// function_declaration = Function(string, block_item list) // string is the function name
+/// function_declaration = Function(string, // function name
+///                        string list, // parameters
+///                        block_item list option) // body
 ///
 /// statement = Return(exp)
 ///           | Exp(exp option)
@@ -30,9 +32,12 @@
 ///     | FunCall(string, exp list)
 /// ```
 
+pub type Program = Vec<Function>;
+
 #[derive(Debug)]
-pub enum Program {
-    Function(String, ReturnType, Vec<String>, Option<Vec<BlockItem>>),
+pub enum Function {
+    Declaration(String, ReturnType, Vec<String>),
+    Definition(String, ReturnType, Vec<String>, Option<Vec<BlockItem>>),
 }
 
 #[derive(Debug)]

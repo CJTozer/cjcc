@@ -1,5 +1,5 @@
 use crate::ast::{
-    BinaryOperator, BlockItem, Declaration, Expression, Program, ReturnType, Statement,
+    BinaryOperator, BlockItem, Declaration, Expression, Function, Program, ReturnType, Statement,
     UnaryOperator,
 };
 use crate::lex::{CKeyWord, CToken};
@@ -164,12 +164,12 @@ where
             }
         }
 
-        Ok(Program::Function(
+        Ok(vec![Function::Definition(
             fn_name.to_string(),
             rtype,
             parameters,
             Some(block_items),
-        ))
+        )])
     }
 
     fn parse_block(&mut self) -> Result<Vec<BlockItem>> {

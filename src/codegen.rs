@@ -1,5 +1,5 @@
 use crate::ast::{
-    BinaryOperator, BlockItem, Declaration, Expression, Program, ReturnType, Statement,
+    BinaryOperator, BlockItem, Declaration, Expression, Function, Program, ReturnType, Statement,
     UnaryOperator,
 };
 use std::collections::HashMap;
@@ -42,10 +42,12 @@ impl Codegen {
 
     pub fn emit_code(&mut self, prog: &Program) -> &str {
         // Currently a program is a single function
-        match prog {
-            Program::Function(name, rtype, params, func) => {
+        match prog.first() {
+            Some(Function::Declaration(name, rtype, params)) => todo!(),
+            Some(Function::Definition(name, rtype, params, func)) => {
                 self.codegen_function(name, rtype, params, func)
             }
+            None => panic!("No functions defined in the program"),
         }
 
         &self.code
