@@ -45,7 +45,7 @@ impl Codegen {
         match prog.first() {
             Some(Function::Declaration(name, rtype, params)) => todo!(),
             Some(Function::Definition(name, rtype, params, func)) => {
-                self.codegen_function(name, rtype, params, func)
+                self.codegen_function_definition(name, rtype, params, func)
             }
             None => panic!("No functions defined in the program"),
         }
@@ -131,12 +131,12 @@ impl Codegen {
         self.code.push_str(&format!("{}:\n", var));
     }
 
-    fn codegen_function(
+    fn codegen_function_definition(
         &mut self,
         name: &str,
         _rtype: &ReturnType,
         params: &Vec<String>,
-        block: &Option<Vec<BlockItem>>,
+        block: &Vec<BlockItem>,
     ) {
         self.code.push_str(&format!("    .globl {}\n", name));
         self.code.push_str(&format!("{}:\n", name));
@@ -148,13 +148,11 @@ impl Codegen {
         self.code.push_str("    mov %rsp, %rbp\n");
 
         // Enter a new scope for the block
-        if let Some(bis) = block {
-            self.enter_scope(None, None);
-            for bi in bis {
-                self.codegen_block_item(bi)
-            }
-            self.leave_scope(false, false);
+        self.enter_scope(None, None);
+        for bi in block {
+            self.codegen_block_item(bi)
         }
+        self.leave_scope(false, false);
 
         // Function epilogue
         // - Set the current stack pointer to our current base (which points at the stored value for the callee's stack base pointer)

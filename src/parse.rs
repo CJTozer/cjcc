@@ -4,13 +4,13 @@ use crate::ast::{
 };
 use crate::lex::{CKeyWord, CToken};
 use crate::scope::Scope;
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use itertools::{put_back_n, PutBackN};
 use std::collections::HashMap;
 
 /// Simplified for only the use-cases we have at any point
 /// ```
-/// <program> ::= <function>
+/// <program> ::= { <function> }
 /// <function> ::= "int" <id> "(" [ "int" <id> { "," "int" <id> } ] ")" ( "{" { <block-item> } "}" | ";" )
 /// <block-item> ::= <statment> | <declaration>
 /// <statement> ::= "return" <exp> ";"
@@ -108,68 +108,129 @@ where
         self.parse_program()
     }
 
-    /// <program> ::= <function>
     pub fn parse_program(&mut self) -> Result<Program> {
-        let prog = if let Some(t) = self.it.next() {
-            match t {
-                CToken::Keyword(CKeyWord::Int) => self.parse_function(ReturnType::Integer)?,
-                _ => bail!("Unexpected token {:?} to start function", t),
-            }
-        } else {
-            bail!("No tokens in program!");
-        };
+        let mut prog = Vec::new();
+
+        // Parse functions until we run out of tokens
+        loop {
+            if let Some(t) = self.it.next() {
+                match t {
+                    CToken::Keyword(CKeyWord::Int) => {
+                        prog.push(self.parse_function(ReturnType::Integer)?)
+                    }
+                    _ => bail!("Unexpected token {:?} to start function", t),
+                }
+            } else {
+                // Out of tokens, stop parsing.
+                break;
+            };
+        }
 
         Ok(prog)
     }
-    // Currently returns a program, as the Function type isn't separated as all programs are
-    // a single function...
-    fn parse_function(&mut self, rtype: ReturnType) -> Result<Program> {
+
+    fn parse_function(&mut self, rtype: ReturnType) -> Result<Function> {
         // Get the function name
         let t = self.it.next();
         let fn_name = if let Some(CToken::Identifier(name)) = t {
             // TODO do I need to make this unique for this scope?
-            self.scope.declare_variable(&name.clone())?;
+            self.scope
+                .declare_variable(&name.clone())
+                .context(format!("declaring variable for function {}", name))?;
             name
         } else {
             bail!("Expected function name identifier, got {:?}", t);
         };
 
-        // Only accept empty parens '()'
-        self.expect_consume_next_token(CToken::OpenParen)?;
-        // TODO parse any function parameters
-        let parameters = Vec::new();
-        self.expect_consume_next_token(CToken::CloseParen)?;
-        // Next, open brace to start function body
-        self.expect_consume_next_token(CToken::OpenBrace)?;
+        // Parse any parameters in parentheses
+        self.expect_consume_next_token(CToken::OpenParen)
+            .context(format!("to begin function {} parameters", fn_name))?;
+        let parameters = self.parse_function_parameters()?;
+        self.expect_consume_next_token(CToken::CloseParen)
+            .context(format!("to end function {} parameters", fn_name))?;
 
-        // Parse block_items until the next token is the end of function '}'.
-        // TODO there may be no block in a declaration (rather than a definition).
-        let mut block_items = self.parse_block()?;
+        // There may be no block in a declaration (rather than a definition).
+        let t = self.it.next();
+        println!(
+            "About to parse function parameters for {}:\n{:?}",
+            fn_name, self.it
+        );
+        if let Some(CToken::SemiColon) = t {
+            // This is a declaration with no body
+            Ok(Function::Declaration(
+                fn_name.to_string(),
+                rtype,
+                parameters,
+            ))
+        } else {
+            // Put back the non-semicolon token
+            if let Some(x) = t {
+                self.it.put_back(x)
+            }
 
-        // Expect to have consumed all our tokens here - our program is a single "main" function for now
-        if let Some(t) = self.it.next() {
-            self.it.put_back(t);
-            bail!("Unexpected tokens {:?} after end of main function", self.it);
+            // Next, open brace to start function body
+            self.expect_consume_next_token(CToken::OpenBrace)
+                .context(format!("to begin function {} body", fn_name))?;
+
+            // Parse block_items until the next token is the end of function '}'.
+            let mut block_items = self
+                .parse_block()
+                .context(format!("parsing function block for {}", fn_name))?;
+
+            // If there is no return statement at the end of the main function, return zero.
+            if fn_name == "main" {
+                match block_items.last() {
+                    // A return statement already exists at the end
+                    Some(BlockItem::Statement(Statement::Return(_))) => {}
+                    // Add return 0
+                    _ => block_items.push(BlockItem::Statement(Statement::Return(
+                        Expression::Constant(0),
+                    ))),
+                }
+            }
+
+            Ok(Function::Definition(
+                fn_name.to_string(),
+                rtype,
+                parameters,
+                block_items,
+            ))
         }
+    }
 
-        // If there is no return statement at the end of the main function, return zero.
-        if fn_name == "main" {
-            match block_items.last() {
-                // A return statement already exists at the end
-                Some(BlockItem::Statement(Statement::Return(_))) => {}
-                // Add return 0
-                _ => block_items.push(BlockItem::Statement(Statement::Return(
-                    Expression::Constant(0),
-                ))),
+    fn parse_function_parameters(&mut self) -> Result<Vec<String>> {
+        let mut params = Vec::new();
+
+        loop {
+            let t = self.it.next();
+            match t {
+                // Comma - consume and expect another parameter
+                Some(CToken::Comma) => {}
+                // ) means we're at the end - put it back and break the loop
+                Some(CToken::CloseParen) => {
+                    self.it.put_back(CToken::CloseParen);
+                    break;
+                }
+                // Anything else assume it's a parameter and leave for the block below
+                Some(t) => self.it.put_back(t),
+                None => bail!("Ran out of tokens parsing function parameters"),
+            }
+
+            match self.it.next() {
+                Some(CToken::Keyword(CKeyWord::Int)) => {
+                    // Have a parameter, expect identifier next
+                    match self.it.next() {
+                        Some(CToken::Identifier(p_name)) => params.push(p_name),
+                        Some(t) => bail!("Unexpected token {:?} parsing function parameters", t),
+                        None => bail!("Ran out of tokens parsing function parameters"),
+                    }
+                }
+                Some(t) => bail!("Unexpected token {:?} parsing function parameters", t),
+                None => bail!("Ran out of tokens parsing function parameters"),
             }
         }
 
-        Ok(vec![Function::Definition(
-            fn_name.to_string(),
-            rtype,
-            parameters,
-            Some(block_items),
-        )])
+        Ok(params)
     }
 
     fn parse_block(&mut self) -> Result<Vec<BlockItem>> {
@@ -231,7 +292,9 @@ where
                             // Variable given a value
                             Some(CToken::Assignment) => {
                                 let exp = self.parse_expression()?;
-                                self.expect_consume_next_token(CToken::SemiColon)?;
+                                self.expect_consume_next_token(CToken::SemiColon).context(
+                                    format!("following declaration of variable {}", varname),
+                                )?;
                                 Declaration::Declare(var_uid, Some(exp))
                             }
                             Some(t) => {
@@ -254,18 +317,11 @@ where
     fn parse_statement(&mut self) -> Result<Statement> {
         // Can be a return statement, a variable declaration, or an expression.
         Ok(match self.it.next() {
-            // TODO
-            // - "normal expression" should be exp-option and handle the null expression case (if next token is ')' or ';')
-            // - | "for" "(" <exp-option> ";" <exp-option> ";" <exp-option> ")" <statement>
-            // - | "for" "(" <declaration> <exp-option> ";" <exp-option> ")" <statement>
-            // - | "while" "(" <exp> ")" <statement>
-            // - | "do" <statement> "while" "(" <exp> ")" ";"
-            // - | "break" ";"
-            // - | "continue" ";"
             Some(CToken::Keyword(CKeyWord::Return)) => {
                 // Return expression
                 let exp = self.parse_expression()?;
-                self.expect_consume_next_token(CToken::SemiColon)?;
+                self.expect_consume_next_token(CToken::SemiColon)
+                    .context("following return statement")?;
                 Statement::Return(exp)
             }
             Some(CToken::Keyword(CKeyWord::If)) => {
@@ -280,18 +336,21 @@ where
             Some(CToken::Keyword(CKeyWord::While)) => self.parse_while_loop()?,
             Some(CToken::Keyword(CKeyWord::Do)) => self.parse_do_loop()?,
             Some(CToken::Keyword(CKeyWord::Break)) => {
-                self.expect_consume_next_token(CToken::SemiColon)?;
+                self.expect_consume_next_token(CToken::SemiColon)
+                    .context("following break statement")?;
                 Statement::Break
             }
             Some(CToken::Keyword(CKeyWord::Continue)) => {
-                self.expect_consume_next_token(CToken::SemiColon)?;
+                self.expect_consume_next_token(CToken::SemiColon)
+                    .context("following continue statement")?;
                 Statement::Continue
             }
             Some(t) => {
                 // A "normal expression".
                 self.it.put_back(t);
                 let exp = self.parse_opt_expression()?;
-                self.expect_consume_next_token(CToken::SemiColon)?;
+                self.expect_consume_next_token(CToken::SemiColon)
+                    .context("following expression")?;
                 Statement::Exp(exp)
             }
             None => bail!("Ran out of tokens parsing statement"),
@@ -300,11 +359,13 @@ where
 
     fn parse_if_statement(&mut self) -> Result<Statement> {
         // If tests always need parentheses
-        self.expect_consume_next_token(CToken::OpenParen)?;
+        self.expect_consume_next_token(CToken::OpenParen)
+            .context("to start if test conditional statement")?;
 
         // Parse the conditional expression, and collect the close parenthesis.
         let cond_exp = self.parse_expression()?;
-        self.expect_consume_next_token(CToken::CloseParen)?;
+        self.expect_consume_next_token(CToken::CloseParen)
+            .context("to complete if test conditional statement")?;
 
         // Parse the if statement - currently doesn't allow a block
         let if_statement = self.parse_statement()?;
@@ -328,7 +389,8 @@ where
 
     fn parse_for_loop(&mut self) -> Result<Statement> {
         let ret;
-        self.expect_consume_next_token(CToken::OpenParen)?;
+        self.expect_consume_next_token(CToken::OpenParen)
+            .context("to begin for loop definition")?;
 
         // Start a new scope as the init statement can shadow.  The inner block gets _another_ new scope too.
         self.scope.start_scope();
@@ -340,20 +402,25 @@ where
             let cond = self
                 .parse_opt_expression()?
                 .unwrap_or(Expression::Constant(1));
-            self.expect_consume_next_token(CToken::SemiColon)?;
+            self.expect_consume_next_token(CToken::SemiColon)
+                .context("after for loop conditional expression")?;
             let update = self.parse_opt_expression()?;
-            self.expect_consume_next_token(CToken::CloseParen)?;
+            self.expect_consume_next_token(CToken::CloseParen)
+                .context("to complete for loop definition")?;
             let inner = self.parse_statement()?;
             ret = Ok(Statement::ForDecl(init, cond, update, Box::new(inner)));
         } else {
             let init = self.parse_opt_expression()?;
-            self.expect_consume_next_token(CToken::SemiColon)?;
+            self.expect_consume_next_token(CToken::SemiColon)
+                .context("after for loop init expression")?;
             let cond = self
                 .parse_opt_expression()?
                 .unwrap_or(Expression::Constant(1));
-            self.expect_consume_next_token(CToken::SemiColon)?;
+            self.expect_consume_next_token(CToken::SemiColon)
+                .context("after for loop conditional expression")?;
             let update = self.parse_opt_expression()?;
-            self.expect_consume_next_token(CToken::CloseParen)?;
+            self.expect_consume_next_token(CToken::CloseParen)
+                .context("to complete for loop definition")?;
             let inner = self.parse_statement()?;
             ret = Ok(Statement::For(init, cond, update, Box::new(inner)));
         }
@@ -365,18 +432,22 @@ where
     }
 
     fn parse_while_loop(&mut self) -> Result<Statement> {
-        self.expect_consume_next_token(CToken::OpenParen)?;
+        self.expect_consume_next_token(CToken::OpenParen)
+            .context("to begin while loop conditional statement")?;
         let exp = self.parse_expression()?;
-        self.expect_consume_next_token(CToken::CloseParen)?;
+        self.expect_consume_next_token(CToken::CloseParen)
+            .context("to complete while loop conditional statement")?;
         let inner = self.parse_statement()?;
         Ok(Statement::While(exp, Box::new(inner)))
     }
 
     fn parse_do_loop(&mut self) -> Result<Statement> {
         let inner = self.parse_statement()?;
-        self.expect_consume_next_token(CToken::Keyword(CKeyWord::While))?;
+        self.expect_consume_next_token(CToken::Keyword(CKeyWord::While))
+            .context("to begin do loop conditional statement")?;
         let exp = self.parse_expression()?;
-        self.expect_consume_next_token(CToken::SemiColon)?;
+        self.expect_consume_next_token(CToken::SemiColon)
+            .context("to complete do loop")?;
         Ok(Statement::Do(Box::new(inner), exp))
     }
 
@@ -424,7 +495,8 @@ where
         Ok(match self.it.next() {
             Some(CToken::QuestionMark) => {
                 let if_branch = self.parse_expression()?;
-                self.expect_consume_next_token(CToken::Colon)?;
+                self.expect_consume_next_token(CToken::Colon)
+                    .context("following if branch of ternary operator")?;
                 let else_branch = self.parse_conditional()?;
                 Expression::Conditional(
                     Box::new(first_exp),
@@ -522,7 +594,8 @@ where
             }
             Some(CToken::OpenParen) => {
                 let inner = self.parse_expression()?;
-                self.expect_consume_next_token(CToken::CloseParen)?;
+                self.expect_consume_next_token(CToken::CloseParen)
+                    .context("at the end of a parenthesized expression")?;
                 inner
             }
             Some(CToken::Identifier(var)) => {

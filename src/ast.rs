@@ -37,7 +37,7 @@ pub type Program = Vec<Function>;
 #[derive(Debug)]
 pub enum Function {
     Declaration(String, ReturnType, Vec<String>),
-    Definition(String, ReturnType, Vec<String>, Option<Vec<BlockItem>>),
+    Definition(String, ReturnType, Vec<String>, Vec<BlockItem>),
 }
 
 #[derive(Debug)]
