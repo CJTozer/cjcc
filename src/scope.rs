@@ -1,19 +1,30 @@
 use anyhow::{bail, Result};
 use std::collections::HashMap;
 
+#[derive(Debug)]
 pub struct Scope {
+    /// Variables can be shadowed so have a stack of scopes
     variables: Vec<HashMap<String, VarData>>,
+    /// Functions are globally scoped
+    functions: HashMap<String, FunData>,
     index: i32,
 }
 
+#[derive(Debug)]
 struct VarData {
     uid: String,
+}
+
+#[derive(Debug)]
+struct FunData {
+    n_params: i32, // Currently only support int32 parameters
 }
 
 impl Scope {
     pub fn top_level() -> Scope {
         Scope {
             variables: vec![HashMap::new()],
+            functions: HashMap::new(),
             index: 0,
         }
     }
@@ -61,5 +72,36 @@ impl Scope {
             "Attempt to use variable {} which is not in this scope.",
             var
         )
+    }
+
+    /// Declares a function, returns a unique reference name
+    pub fn declare_function(&mut self, fun: &String, n_params: i32) -> Result<()> {
+        // TODO get context on file/line
+        if self.functions.contains_key(fun) {
+            bail!("Function {} already defined", fun)
+        } else {
+            let fun_data = FunData { n_params: n_params };
+            self.functions.insert(fun.clone(), fun_data);
+            Ok(())
+        }
+    }
+
+    /// Checks that a function exists with the same parameters
+    pub fn check_function_call(&self, fun: &String, n_params: i32) -> Result<()> {
+        if let Some(fun_data) = self.functions.get(fun) {
+            if fun_data.n_params == n_params {
+                Ok(())
+            } else {
+                bail!(
+                    "Calling function '{}' with {} parameters, expected {}.",
+                    fun,
+                    n_params,
+                    fun_data.n_params
+                )
+            }
+        } else {
+            println!("{:?}", self);
+            bail!("No function '{}' defined in this scope.", fun)
+        }
     }
 }

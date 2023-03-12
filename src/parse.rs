@@ -90,7 +90,7 @@ impl BinOpPrecedence {
 
 pub struct Parser<I: Iterator<Item = CToken>> {
     it: PutBackN<I>,
-    scope: Box<Scope>,
+    scope: Scope,
 }
 
 impl<I> Parser<I>
@@ -100,7 +100,7 @@ where
     pub fn new(raw_it: I) -> Parser<I> {
         Parser {
             it: put_back_n(raw_it),
-            scope: Box::new(Scope::top_level()),
+            scope: Scope::top_level(),
         }
     }
 
@@ -151,12 +151,10 @@ where
 
         // There may be no block in a declaration (rather than a definition).
         let t = self.it.next();
-        println!(
-            "About to parse function parameters for {}:\n{:?}",
-            fn_name, self.it
-        );
         if let Some(CToken::SemiColon) = t {
             // This is a declaration with no body
+            self.scope
+                .declare_function(&fn_name, parameters.len() as i32)?;
             Ok(Function::Declaration(
                 fn_name.to_string(),
                 rtype,
@@ -570,26 +568,25 @@ where
                 Self::parse_binary_ops_by_precedence,
                 cur,
             ),
-            // Out of binary operators, drop down to parsing unary operators
-            None => self.parse_unary_ops(),
+            // Out of binary operators, drop down to parsing a "factor"
+            None => self.parse_factor(),
         }
     }
 
-    fn parse_unary_ops(&mut self) -> Result<Expression> {
-        // Currently only expect an integer constant.
+    fn parse_factor(&mut self) -> Result<Expression> {
         let t = self.it.next();
         Ok(match t {
             Some(CToken::Integer(val)) => Expression::Constant(val),
             Some(CToken::Minus) => {
-                let inner = self.parse_unary_ops()?;
+                let inner = self.parse_factor()?;
                 Expression::UnOp(UnaryOperator::Negation, Box::new(inner))
             }
             Some(CToken::BitwiseComplement) => {
-                let inner = self.parse_unary_ops()?;
+                let inner = self.parse_factor()?;
                 Expression::UnOp(UnaryOperator::BitwiseComplement, Box::new(inner))
             }
             Some(CToken::LogicalNegation) => {
-                let inner = self.parse_unary_ops()?;
+                let inner = self.parse_factor()?;
                 Expression::UnOp(UnaryOperator::LogicalNegation, Box::new(inner))
             }
             Some(CToken::OpenParen) => {
@@ -598,12 +595,53 @@ where
                     .context("at the end of a parenthesized expression")?;
                 inner
             }
-            Some(CToken::Identifier(var)) => {
-                let var_uid = self.scope.check_variable_in_scope(&var)?;
-                Expression::Var(var_uid)
+            Some(CToken::Identifier(name)) => {
+                // If followed by '(' it's a function call
+                match self.it.next() {
+                    Some(CToken::OpenParen) => self.parse_function_call(name)?,
+                    o_t => {
+                        if let Some(t) = o_t {
+                            self.it.put_back(t);
+                        }
+                        let var_uid = self
+                            .scope
+                            .check_variable_in_scope(&name)
+                            .context(format!("attempting to use identifier '{}'", name))?;
+                        Expression::Var(var_uid)
+                    }
+                }
             }
             _ => bail!("Unexpected token parsing factor: {:?}", t),
         })
+    }
+
+    fn parse_function_call(&mut self, fn_name: String) -> Result<Expression> {
+        // Expect any number (zero or more) expressions separated by commas
+        let mut parameters = Vec::new();
+        loop {
+            match self.it.next() {
+                // Close parentheses, end of parameters
+                Some(CToken::CloseParen) => break,
+                // Another parameter expression to parse
+                Some(t) => {
+                    // Put back last token unless it was a comma
+                    if t != CToken::Comma {
+                        self.it.put_back(t);
+                    }
+                    parameters.push(
+                        self.parse_expression()
+                            .context(format!("Parsing function call to '{}'", fn_name))?,
+                    );
+                }
+                None => bail!(format!("Ran out of tokens parsing call to {}", fn_name)),
+            }
+        }
+
+        // Check this is valid
+        // TODO move to a new processing stage
+        self.scope
+            .check_function_call(&fn_name, parameters.len() as i32)?;
+        Ok(Expression::FunCall(fn_name, parameters))
     }
 
     fn expect_consume_next_token(&mut self, exp_tok: CToken) -> Result<()> {
