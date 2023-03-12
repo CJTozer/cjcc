@@ -41,13 +41,13 @@ impl Codegen {
     }
 
     pub fn emit_code(&mut self, prog: &Program) -> &str {
-        // Currently a program is a single function
-        match prog.first() {
-            Some(Function::Declaration(name, rtype, params)) => todo!(),
-            Some(Function::Definition(name, rtype, params, func)) => {
-                self.codegen_function_definition(name, rtype, params, func)
+        for fun in prog {
+            match fun {
+                Function::Declaration(name, rtype, params) => todo!(),
+                Function::Definition(name, rtype, params, func) => {
+                    self.codegen_function_definition(name, rtype, params, func)
+                }
             }
-            None => panic!("No functions defined in the program"),
         }
 
         &self.code

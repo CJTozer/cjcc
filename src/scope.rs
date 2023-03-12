@@ -74,12 +74,30 @@ impl Scope {
         )
     }
 
-    /// Declares a function, returns a unique reference name
+    /// Declares a function
     pub fn declare_function(&mut self, fun: &String, n_params: i32) -> Result<()> {
         // TODO get context on file/line
         if self.functions.contains_key(fun) {
-            bail!("Function {} already defined", fun)
+            bail!("Function {} already declared", fun)
         } else {
+            let fun_data = FunData { n_params: n_params };
+            self.functions.insert(fun.clone(), fun_data);
+            Ok(())
+        }
+    }
+
+    /// Defines a function - it may or may not have already been defined.
+    pub fn define_function(&mut self, fun: &String, n_params: i32) -> Result<()> {
+        // TODO get context on file/line
+        if let Some(fun_data) = self.functions.get(fun) {
+            if fun_data.n_params == n_params {
+                // Definition matches declaration
+                Ok(())
+            } else {
+                bail!("Function definition for '{}' ({} arguments) does not match declaration ({} arguments)", fun, n_params, fun_data.n_params)
+            }
+        } else {
+            // Not already declared, make this the implicit declaration.
             let fun_data = FunData { n_params: n_params };
             self.functions.insert(fun.clone(), fun_data);
             Ok(())

@@ -133,10 +133,6 @@ where
         // Get the function name
         let t = self.it.next();
         let fn_name = if let Some(CToken::Identifier(name)) = t {
-            // TODO do I need to make this unique for this scope?
-            self.scope
-                .declare_variable(&name.clone())
-                .context(format!("declaring variable for function {}", name))?;
             name
         } else {
             bail!("Expected function name identifier, got {:?}", t);
@@ -161,6 +157,10 @@ where
                 parameters,
             ))
         } else {
+            // This is a definition, which may be an implicit declaration, or it should match an explicit declaration
+            self.scope
+                .define_function(&fn_name, parameters.len() as i32)?;
+
             // Put back the non-semicolon token
             if let Some(x) = t {
                 self.it.put_back(x)
