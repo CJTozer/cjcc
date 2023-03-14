@@ -161,10 +161,13 @@ where
             self.scope
                 .define_function(&fn_name, parameters.len() as i32)?;
 
+            // Enter a new scope so the parameters don't leak into the global scope
+            self.scope.start_scope();
+
             // Define the parameters as variables that can be used inside the function
             let mut uid_params = Vec::new();
             for p in parameters.clone() {
-                uid_params.push(self.scope.declare_variable(&p)?);
+                uid_params.push(self.scope.declare_variable(&p, true)?);
             }
 
             // Put back the non-semicolon token
@@ -192,6 +195,9 @@ where
                     ))),
                 }
             }
+
+            // Exit this scope
+            self.scope.end_scope();
 
             Ok(Function::Definition(
                 fn_name.to_string(),
@@ -288,7 +294,7 @@ where
                 match self.it.next() {
                     Some(CToken::Identifier(varname)) => {
                         // Add the variable to this scope (will error if this is a duplicate)
-                        let var_uid = self.scope.declare_variable(&varname.clone())?;
+                        let var_uid = self.scope.declare_variable(&varname.clone(), false)?;
                         // There may or may not be an expression following the declaration to set the value.
                         match self.it.next() {
                             // Variable not assigned on declaration

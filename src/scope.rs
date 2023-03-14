@@ -13,6 +13,8 @@ pub struct Scope {
 #[derive(Debug)]
 struct VarData {
     uid: String,
+    // Is this a function parameter (which would prevent shadowing)?
+    is_parameter: bool,
 }
 
 #[derive(Debug)]
@@ -38,7 +40,10 @@ impl Scope {
     }
 
     /// Declares a variable in this scope, and returns a unique reference for this variable at this scope
-    pub fn declare_variable(&mut self, var: &String) -> Result<String> {
+    pub fn declare_variable(&mut self, var: &String, is_param: bool) -> Result<String> {
+        // First check this variable doesn't shadow a function parameter
+        self.check_not_shadowing_parameter(var)?;
+
         let unique_name = String::from(format!("var{}_{}", self.index, &var.clone()));
         self.index += 1;
         match self.variables.last_mut() {
@@ -50,6 +55,7 @@ impl Scope {
                         var.clone(),
                         VarData {
                             uid: unique_name.clone(),
+                            is_parameter: is_param,
                         },
                     );
                 }
@@ -58,6 +64,22 @@ impl Scope {
         }
 
         Ok(unique_name)
+    }
+
+    fn check_not_shadowing_parameter(&self, var: &String) -> Result<()> {
+        for x in self.variables.iter().rev() {
+            if let Some(vardata) = x.get(var) {
+                if vardata.is_parameter {
+                    bail!(
+                        "Declaring variable '{}' which shadows a function parameter.  {:?}",
+                        var,
+                        self.variables,
+                    )
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Checks for this variable in this and any outer scopes, and returns the unique reference for this variable at the most inner scope

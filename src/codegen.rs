@@ -46,7 +46,7 @@ impl Codegen {
     pub fn emit_code(&mut self, prog: &Program) -> &str {
         for fun in prog {
             match fun {
-                Function::Declaration(name, rtype, params) => (),
+                Function::Declaration(_name, _rtype, _params) => (),
                 Function::Definition(name, rtype, params, func) => {
                     self.codegen_function_definition(name, rtype, params, func)
                 }
@@ -89,6 +89,7 @@ impl Codegen {
         self.previous_scope_stack_sizes
             .push(self.current_scope_stack_size);
         self.current_scope_stack_size = 0;
+        self.param_index = 16;
 
         // Push the continue and break labels, if passed
         if let Some(cl) = continue_label {

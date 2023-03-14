@@ -1,10 +1,7 @@
 /// Main tokenizer
 use anyhow::{bail, Result};
 use colored::Colorize;
-use nom::bytes::complete::take_while;
-use nom::character::complete::{alphanumeric0, digit1, multispace1};
-use nom::character::is_alphanumeric;
-use nom::IResult;
+use nom::character::complete::{digit1, multispace1};
 use std::cmp::min;
 use std::fmt;
 use strum::IntoEnumIterator;
