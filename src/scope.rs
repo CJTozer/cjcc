@@ -76,14 +76,9 @@ impl Scope {
 
     /// Declares a function
     pub fn declare_function(&mut self, fun: &String, n_params: i32) -> Result<()> {
-        // TODO get context on file/line
-        if self.functions.contains_key(fun) {
-            bail!("Function {} already declared", fun)
-        } else {
-            let fun_data = FunData { n_params: n_params };
-            self.functions.insert(fun.clone(), fun_data);
-            Ok(())
-        }
+        // It's acceptable for a function declaration to come after the definition (or to be declared more than once).
+        // Check it has the same parameters - which is the same as `define_function` so default to that.
+        self.define_function(fun, n_params)
     }
 
     /// Defines a function - it may or may not have already been defined.

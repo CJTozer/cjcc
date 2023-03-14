@@ -46,7 +46,7 @@ impl Codegen {
     pub fn emit_code(&mut self, prog: &Program) -> &str {
         for fun in prog {
             match fun {
-                Function::Declaration(name, rtype, params) => todo!(),
+                Function::Declaration(name, rtype, params) => (),
                 Function::Definition(name, rtype, params, func) => {
                     self.codegen_function_definition(name, rtype, params, func)
                 }

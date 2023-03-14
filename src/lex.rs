@@ -1,7 +1,10 @@
 /// Main tokenizer
 use anyhow::{bail, Result};
 use colored::Colorize;
+use nom::bytes::complete::take_while;
 use nom::character::complete::{alphanumeric0, digit1, multispace1};
+use nom::character::is_alphanumeric;
+use nom::IResult;
 use std::cmp::min;
 use std::fmt;
 use strum::IntoEnumIterator;
@@ -227,8 +230,22 @@ fn keyword_from_slice(s: &str) -> Option<(CToken, usize)> {
     None
 }
 
+fn take_identifier_chars(s: &str) -> String {
+    let mut ret = String::new();
+
+    for c in s.chars() {
+        match c {
+            x if x.is_alphanumeric() || x == '_' => ret.push(c),
+            _ => break,
+        }
+    }
+
+    ret
+}
+
 fn identifier_token_from_slice(s: &str) -> Result<(CToken, usize)> {
-    let (_, kw_slice) = alphanumeric0::<&str, ()>(s)?; // Ignoring error type (second parameterized type)
+    let kw_slice = take_identifier_chars(s);
+
     match kw_slice.len() {
         0 => bail!(
             "Unexpected token '{}' when lexing:\n  {}\n  {}\n",
