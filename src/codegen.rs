@@ -12,6 +12,8 @@ pub struct Codegen {
     global_id: i32,
     /// The next available index on the stack.  When %rbp == %rsp, this is initially -8.
     stack_index: i32,
+    /// The next available index for parameters.  Initially = +16 and moves "up" higher.
+    param_index: i32,
     /// The size of stack allocated at this scope
     current_scope_stack_size: i32,
     previous_scope_stack_sizes: Vec<i32>,
@@ -31,6 +33,7 @@ impl Codegen {
         Codegen {
             global_id: 0,
             stack_index: -8,
+            param_index: 16,
             current_scope_stack_size: 0,
             previous_scope_stack_sizes: Vec::new(),
             variables: HashMap::new(),
@@ -68,6 +71,16 @@ impl Codegen {
             self.variables.insert(var, self.stack_index);
             self.stack_index -= 8;
             self.current_scope_stack_size += 8;
+        }
+    }
+
+    fn declare_parameter(&mut self, var: String) {
+        if self.variables.contains_key(&var) {
+            panic!("Variable {} already defined", var);
+        } else {
+            // Record the stack frame containing this parameter (these go above %rbp, starting at +16)
+            self.variables.insert(var, self.param_index);
+            self.param_index += 8;
         }
     }
 
@@ -123,7 +136,10 @@ impl Codegen {
     fn get_stack_index(&self, var: &String) -> i32 {
         match self.variables.get(var) {
             Some(offset) => *offset,
-            _ => panic!("Attempt to use uninitialized variable {}", var),
+            _ => panic!(
+                "Attempt to use uninitialized variable {}.\n{:?}",
+                var, self.variables
+            ),
         }
     }
 
@@ -149,6 +165,12 @@ impl Codegen {
 
         // Enter a new scope for the block
         self.enter_scope(None, None);
+
+        // Define the parameters as variables that can be used here
+        for p in params {
+            self.declare_parameter(p.clone());
+        }
+
         for bi in block {
             self.codegen_block_item(bi)
         }
@@ -231,7 +253,7 @@ impl Codegen {
         // Put args on the stack (reverse order)
         for exp in params.iter().rev() {
             self.codegen_expression(exp);
-            self.code.push_str("    push %eax\n");
+            self.code.push_str("    push %rax\n");
         }
 
         // Issue the call instruction
@@ -239,7 +261,7 @@ impl Codegen {
 
         // Remove arguments from the stack after call
         self.code
-            .push_str(&format!("    add ${}, %esp\n", params.len() * 8));
+            .push_str(&format!("    add ${}, %rsp\n", params.len() * 8));
     }
 
     // TODO How can I combine with if test?

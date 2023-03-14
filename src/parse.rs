@@ -161,6 +161,12 @@ where
             self.scope
                 .define_function(&fn_name, parameters.len() as i32)?;
 
+            // Define the parameters as variables that can be used inside the function
+            let mut uid_params = Vec::new();
+            for p in parameters.clone() {
+                uid_params.push(self.scope.declare_variable(&p)?);
+            }
+
             // Put back the non-semicolon token
             if let Some(x) = t {
                 self.it.put_back(x)
@@ -190,7 +196,7 @@ where
             Ok(Function::Definition(
                 fn_name.to_string(),
                 rtype,
-                parameters,
+                uid_params,
                 block_items,
             ))
         }
