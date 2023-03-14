@@ -223,8 +223,23 @@ impl Codegen {
             Expression::Conditional(cond, if_branch, else_branch) => {
                 self.codegen_ternary(cond, if_branch, else_branch)
             }
-            Expression::FunCall(name, params) => todo!(),
+            Expression::FunCall(name, params) => self.codegen_function_call(name, params),
         }
+    }
+
+    fn codegen_function_call(&mut self, name: &String, params: &Vec<Expression>) {
+        // Put args on the stack (reverse order)
+        for exp in params.iter().rev() {
+            self.codegen_expression(exp);
+            self.code.push_str("    push %eax\n");
+        }
+
+        // Issue the call instruction
+        self.code.push_str(&format!("    call {}\n", name));
+
+        // Remove arguments from the stack after call
+        self.code
+            .push_str(&format!("    add ${}, %esp\n", params.len() * 8));
     }
 
     // TODO How can I combine with if test?
