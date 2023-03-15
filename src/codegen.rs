@@ -167,7 +167,7 @@ impl Codegen {
         // Enter a new scope for the block
         self.enter_scope(None, None);
 
-        // Define the parameters as variables that can be used here
+        // Define the parameters as variables that can be used here, and push them onto the stack, for simplicity
         for p in params {
             self.declare_parameter(p.clone());
         }
@@ -250,7 +250,8 @@ impl Codegen {
         }
     }
 
-    fn codegen_function_call(&mut self, name: &String, params: &Vec<Expression>) {
+    /// If using "pure" Linux not WSL
+    fn codegen_function_call_cdecl(&mut self, name: &String, params: &Vec<Expression>) {
         // Put args on the stack (reverse order)
         for exp in params.iter().rev() {
             self.codegen_expression(exp);
@@ -261,6 +262,39 @@ impl Codegen {
         self.code.push_str(&format!("    call {}\n", name));
 
         // Remove arguments from the stack after call
+        self.code
+            .push_str(&format!("    add ${}, %rsp\n", params.len() * 8));
+    }
+
+    /// Codegen for WSL
+    fn codegen_function_call(&mut self, name: &String, params: &Vec<Expression>) {
+        // See https://gitlab.com/x86-psABIs/x86-64-ABI/.
+        // Integer valued parameters go:
+        // - first siz in %rdi, %rsi, %rdx, %rcx, %r8 and %r9, in left-to-right order
+        // - any remaining go on the stack, in right-to-left order
+
+        // First put args on the stack (in reverse order)
+        for exp in params.iter().rev() {
+            self.codegen_expression(exp);
+            self.code.push_str("    push %rax\n");
+        }
+
+        // Then pop the first six arguments into registers, leaving the 7th onwards on the stack
+        let all_param_registers = vec!["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
+        for r in &all_param_registers[..params.len()] {
+            self.code.push_str(&format!("    pop %{}\n", r));
+        }
+
+        // Finally make sure the parameters are _also_ on the stack, to keep the internal calls simpler
+        for r in all_param_registers[..params.len()].iter().rev() {
+            self.code.push_str(&format!("    push %{}\n", r));
+        }
+
+        // Issue the call instruction
+        self.code.push_str(&format!("    call {}\n", name));
+
+        // Remove arguments from the stack after call
+
         self.code
             .push_str(&format!("    add ${}, %rsp\n", params.len() * 8));
     }
