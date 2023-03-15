@@ -1,5 +1,5 @@
 use crate::ast::{
-    BinaryOperator, BlockItem, Declaration, Expression, Program, ReturnType, Statement,
+    BinaryOperator, BlockItem, Declaration, Expression, Function, Program, ReturnType, Statement,
     UnaryOperator,
 };
 use std::collections::HashMap;
@@ -12,6 +12,8 @@ pub struct Codegen {
     global_id: i32,
     /// The next available index on the stack.  When %rbp == %rsp, this is initially -8.
     stack_index: i32,
+    /// The next available index for parameters.  Initially = +16 and moves "up" higher.
+    param_index: i32,
     /// The size of stack allocated at this scope
     current_scope_stack_size: i32,
     previous_scope_stack_sizes: Vec<i32>,
@@ -31,6 +33,7 @@ impl Codegen {
         Codegen {
             global_id: 0,
             stack_index: -8,
+            param_index: 16,
             current_scope_stack_size: 0,
             previous_scope_stack_sizes: Vec::new(),
             variables: HashMap::new(),
@@ -41,9 +44,13 @@ impl Codegen {
     }
 
     pub fn emit_code(&mut self, prog: &Program) -> &str {
-        // Currently a program is a single function
-        match prog {
-            Program::Function(name, rtype, func) => self.codegen_function(name, rtype, func),
+        for fun in prog {
+            match fun {
+                Function::Declaration(_name, _rtype, _params) => (),
+                Function::Definition(name, rtype, params, func) => {
+                    self.codegen_function_definition(name, rtype, params, func)
+                }
+            }
         }
 
         &self.code
@@ -67,11 +74,22 @@ impl Codegen {
         }
     }
 
+    fn declare_parameter(&mut self, var: String) {
+        if self.variables.contains_key(&var) {
+            panic!("Variable {} already defined", var);
+        } else {
+            // Record the stack frame containing this parameter (these go above %rbp, starting at +16)
+            self.variables.insert(var, self.param_index);
+            self.param_index += 8;
+        }
+    }
+
     fn enter_scope(&mut self, continue_label: Option<String>, break_label: Option<String>) {
         // Push the current stack size onto the list and reinitialize
         self.previous_scope_stack_sizes
             .push(self.current_scope_stack_size);
         self.current_scope_stack_size = 0;
+        self.param_index = 16;
 
         // Push the continue and break labels, if passed
         if let Some(cl) = continue_label {
@@ -119,7 +137,10 @@ impl Codegen {
     fn get_stack_index(&self, var: &String) -> i32 {
         match self.variables.get(var) {
             Some(offset) => *offset,
-            _ => panic!("Attempt to use uninitialized variable {}", var),
+            _ => panic!(
+                "Attempt to use uninitialized variable {}.\n{:?}",
+                var, self.variables
+            ),
         }
     }
 
@@ -127,7 +148,13 @@ impl Codegen {
         self.code.push_str(&format!("{}:\n", var));
     }
 
-    fn codegen_function(&mut self, name: &str, _rtype: &ReturnType, bis: &Vec<BlockItem>) {
+    fn codegen_function_definition(
+        &mut self,
+        name: &str,
+        _rtype: &ReturnType,
+        params: &Vec<String>,
+        block: &Vec<BlockItem>,
+    ) {
         self.code.push_str(&format!("    .globl {}\n", name));
         self.code.push_str(&format!("{}:\n", name));
 
@@ -139,7 +166,13 @@ impl Codegen {
 
         // Enter a new scope for the block
         self.enter_scope(None, None);
-        for bi in bis {
+
+        // Define the parameters as variables that can be used here, and push them onto the stack, for simplicity
+        for p in params {
+            self.declare_parameter(p.clone());
+        }
+
+        for bi in block {
             self.codegen_block_item(bi)
         }
         self.leave_scope(false, false);
@@ -213,7 +246,57 @@ impl Codegen {
             Expression::Conditional(cond, if_branch, else_branch) => {
                 self.codegen_ternary(cond, if_branch, else_branch)
             }
+            Expression::FunCall(name, params) => self.codegen_function_call(name, params),
         }
+    }
+
+    /// If using "pure" Linux not WSL
+    fn codegen_function_call_cdecl(&mut self, name: &String, params: &Vec<Expression>) {
+        // Put args on the stack (reverse order)
+        for exp in params.iter().rev() {
+            self.codegen_expression(exp);
+            self.code.push_str("    push %rax\n");
+        }
+
+        // Issue the call instruction
+        self.code.push_str(&format!("    call {}\n", name));
+
+        // Remove arguments from the stack after call
+        self.code
+            .push_str(&format!("    add ${}, %rsp\n", params.len() * 8));
+    }
+
+    /// Codegen for WSL
+    fn codegen_function_call(&mut self, name: &String, params: &Vec<Expression>) {
+        // See https://gitlab.com/x86-psABIs/x86-64-ABI/.
+        // Integer valued parameters go:
+        // - first siz in %rdi, %rsi, %rdx, %rcx, %r8 and %r9, in left-to-right order
+        // - any remaining go on the stack, in right-to-left order
+
+        // First put args on the stack (in reverse order)
+        for exp in params.iter().rev() {
+            self.codegen_expression(exp);
+            self.code.push_str("    push %rax\n");
+        }
+
+        // Then pop the first six arguments into registers, leaving the 7th onwards on the stack
+        let all_param_registers = vec!["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
+        for r in &all_param_registers[..params.len()] {
+            self.code.push_str(&format!("    pop %{}\n", r));
+        }
+
+        // Finally make sure the parameters are _also_ on the stack, to keep the internal calls simpler
+        for r in all_param_registers[..params.len()].iter().rev() {
+            self.code.push_str(&format!("    push %{}\n", r));
+        }
+
+        // Issue the call instruction
+        self.code.push_str(&format!("    call {}\n", name));
+
+        // Remove arguments from the stack after call
+
+        self.code
+            .push_str(&format!("    add ${}, %rsp\n", params.len() * 8));
     }
 
     // TODO How can I combine with if test?

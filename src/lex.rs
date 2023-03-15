@@ -1,7 +1,7 @@
 /// Main tokenizer
 use anyhow::{bail, Result};
 use colored::Colorize;
-use nom::character::complete::{alphanumeric0, digit1, multispace1};
+use nom::character::complete::{digit1, multispace1};
 use std::cmp::min;
 use std::fmt;
 use strum::IntoEnumIterator;
@@ -46,6 +46,8 @@ pub enum CToken {
     ComparisonGreaterThanEq, // >=
     // Assignment
     Assignment, // =
+    // Specials
+    Comma, // ,
     // Whitespace
     Whitespace,
 }
@@ -136,7 +138,8 @@ fn next_token(data: &str) -> Result<(CToken, usize)> {
             '=' => parse_equals_token(data),
             '>' => parse_gt_token(data),
             '<' => parse_lt_token(data),
-            // Anything left (at this point, should be a keyword or identifier - we don't handle commas etc. yet)
+            ',' => Ok((CToken::Comma, 1)),
+            // Anything left (at this point, should be a keyword or identifier - or something we don't handle yet)
             _ => keyword_or_identifier_from_slice(data),
         },
     }
@@ -224,8 +227,22 @@ fn keyword_from_slice(s: &str) -> Option<(CToken, usize)> {
     None
 }
 
+fn take_identifier_chars(s: &str) -> String {
+    let mut ret = String::new();
+
+    for c in s.chars() {
+        match c {
+            x if x.is_alphanumeric() || x == '_' => ret.push(c),
+            _ => break,
+        }
+    }
+
+    ret
+}
+
 fn identifier_token_from_slice(s: &str) -> Result<(CToken, usize)> {
-    let (_, kw_slice) = alphanumeric0::<&str, ()>(s)?; // Ignoring error type (second parameterized type)
+    let kw_slice = take_identifier_chars(s);
+
     match kw_slice.len() {
         0 => bail!(
             "Unexpected token '{}' when lexing:\n  {}\n  {}\n",

@@ -1,8 +1,10 @@
 //     | Constant(int)
 /// ```
-/// program = Program(function_declaration)
+/// program = Program(function_declaration list)
 ///
-/// function_declaration = Function(string, block_item list) // string is the function name
+/// function_declaration = Function(string, // function name
+///                        string list, // parameters
+///                        block_item list option) // body
 ///
 /// statement = Return(exp)
 ///           | Exp(exp option)
@@ -27,11 +29,15 @@
 ///     | BinOp(binary_operator, exp, exp)
 ///     | UnOp(unary_operator, exp)
 ///     | Constant(int)
+///     | FunCall(string, exp list)
 /// ```
 
+pub type Program = Vec<Function>;
+
 #[derive(Debug)]
-pub enum Program {
-    Function(String, ReturnType, Vec<BlockItem>),
+pub enum Function {
+    Declaration(String, ReturnType, Vec<String>),
+    Definition(String, ReturnType, Vec<String>, Vec<BlockItem>),
 }
 
 #[derive(Debug)]
@@ -77,6 +83,7 @@ pub enum Expression {
     UnOp(UnaryOperator, Box<Expression>),
     Constant(i32),
     Conditional(Box<Expression>, Box<Expression>, Box<Expression>),
+    FunCall(String, Vec<Expression>),
 }
 
 #[derive(Debug)]
