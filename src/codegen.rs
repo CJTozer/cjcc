@@ -3,6 +3,7 @@ use crate::ast::{
     UnaryOperator,
 };
 use std::collections::HashMap;
+use std::fmt;
 
 // TODO
 // - Add some proper tests
@@ -19,7 +20,7 @@ pub struct Codegen {
     previous_scope_stack_sizes: Vec<i32>,
     /// The set of variables that have been declared in this context.
     /// This stores the identifier and stack index.
-    variables: HashMap<String, i32>,
+    variables: HashMap<String, VarLocation>,
     /// The stack of labels that a "continue" statement will point to
     continue_labels: Vec<String>,
     /// The stack of labels that a "break" statement will point to
@@ -68,7 +69,8 @@ impl Codegen {
             panic!("Variable {} already defined", var);
         } else {
             // Record the stack frame containing this variable, and move the stack index on
-            self.variables.insert(var, self.stack_index);
+            self.variables
+                .insert(var, VarLocation::Stack(self.stack_index));
             self.stack_index -= 8;
             self.current_scope_stack_size += 8;
         }
@@ -79,7 +81,8 @@ impl Codegen {
             panic!("Variable {} already defined", var);
         } else {
             // Record the stack frame containing this parameter (these go above %rbp, starting at +16)
-            self.variables.insert(var, self.param_index);
+            self.variables
+                .insert(var, VarLocation::Stack(self.param_index));
             self.param_index += 8;
         }
     }
@@ -250,27 +253,11 @@ impl Codegen {
         }
     }
 
-    /// If using "pure" Linux not WSL
-    fn codegen_function_call_cdecl(&mut self, name: &String, params: &Vec<Expression>) {
-        // Put args on the stack (reverse order)
-        for exp in params.iter().rev() {
-            self.codegen_expression(exp);
-            self.code.push_str("    push %rax\n");
-        }
-
-        // Issue the call instruction
-        self.code.push_str(&format!("    call {}\n", name));
-
-        // Remove arguments from the stack after call
-        self.code
-            .push_str(&format!("    add ${}, %rsp\n", params.len() * 8));
-    }
-
     /// Codegen for WSL
     fn codegen_function_call(&mut self, name: &String, params: &Vec<Expression>) {
         // See https://gitlab.com/x86-psABIs/x86-64-ABI/.
         // Integer valued parameters go:
-        // - first siz in %rdi, %rsi, %rdx, %rcx, %r8 and %r9, in left-to-right order
+        // - first six in %rdi, %rsi, %rdx, %rcx, %r8 and %r9, in left-to-right order
         // - any remaining go on the stack, in right-to-left order
 
         // First put args on the stack (in reverse order)
@@ -704,5 +691,37 @@ impl Codegen {
         // Set lower half of %rax to match whichever flag was passed in
         self.code
             .push_str(&format!("    {} %al\n", set_instruction));
+    }
+}
+
+/// Locations for a variable
+#[derive(Debug)]
+enum VarLocation {
+    Stack(i32),         // Variable is on the stack.  Delta on %rbp.
+    Register(ParamReg), // Variable is in a register (because it was a function parameter).
+}
+
+/// Registers that can contain a function parameter
+/// %rdi, %rsi, %rdx, %rcx, %r8 and %r9
+#[derive(Debug)]
+enum ParamReg {
+    Rdi,
+    Rsi,
+    Rcx,
+    Rdx,
+    R8,
+    R9,
+}
+
+impl fmt::Display for ParamReg {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ParamReg::Rdi => write!(f, "rdi"),
+            ParamReg::Rsi => write!(f, "rsi"),
+            ParamReg::Rcx => write!(f, "rcx"),
+            ParamReg::Rdx => write!(f, "rdx"),
+            ParamReg::R8 => write!(f, "r8"),
+            ParamReg::R9 => write!(f, "r9"),
+        }
     }
 }
